@@ -98,6 +98,54 @@ MESSAGES: dict[str, dict[str, str]] = {
         "ja": "Xcode ビルド完了 ({seconds}s)",
         "zh": "Xcode 构建完成 ({seconds}s)",
     },
+    "GODOT_BIN_NOT_FOUND": {
+        "ko": "{executable} 실행 파일을 찾을 수 없습니다. UBS_GODOT_BIN으로 경로를 지정하세요.",
+        "en": "Could not find the {executable} executable. Set UBS_GODOT_BIN to its path.",
+        "ja": "{executable} 実行ファイルが見つかりません。UBS_GODOT_BIN でパスを指定してください。",
+        "zh": "找不到 {executable} 可执行文件。请通过 UBS_GODOT_BIN 指定路径。",
+    },
+    "GODOT_PRESET_NOT_FOUND": {
+        "ko": "export_presets.cfg에 \"{name}\" preset이 없습니다.",
+        "en": "No preset named \"{name}\" in export_presets.cfg.",
+        "ja": "export_presets.cfg に \"{name}\" という preset がありません。",
+        "zh": "export_presets.cfg 中没有名为 \"{name}\" 的 preset。",
+    },
+    "GODOT_NO_MATCHING_PRESET": {
+        "ko": "UBS_GODOT_PLATFORM={platform}에 해당하는 export preset이 없습니다.",
+        "en": "No export preset matches UBS_GODOT_PLATFORM={platform}.",
+        "ja": "UBS_GODOT_PLATFORM={platform} に一致する export preset がありません。",
+        "zh": "没有与 UBS_GODOT_PLATFORM={platform} 匹配的 export preset。",
+    },
+    "GODOT_PRESET_NO_EXPORT_PATH": {
+        "ko": "preset \"{name}\"에 export_path가 설정돼 있지 않습니다.",
+        "en": "Preset \"{name}\" has no export_path configured.",
+        "ja": "preset \"{name}\" に export_path が設定されていません。",
+        "zh": "preset \"{name}\" 未配置 export_path。",
+    },
+    "GODOT_IOS_MACOS_ONLY": {
+        "ko": "Godot iOS export는 macOS에서만 실행할 수 있습니다.",
+        "en": "Godot iOS exports can only run on macOS.",
+        "ja": "Godot iOS export は macOS でのみ実行できます。",
+        "zh": "Godot iOS 导出仅可在 macOS 上运行。",
+    },
+    "GODOT_IOS_SKIPPED_NON_MACOS": {
+        "ko": "macOS가 아니라서 iOS preset \"{name}\"을(를) 건너뜁니다.",
+        "en": "Skipping iOS preset \"{name}\" — not running on macOS.",
+        "ja": "macOS ではないため iOS preset \"{name}\" をスキップします。",
+        "zh": "当前不在 macOS 上，跳过 iOS preset \"{name}\"。",
+    },
+    "GODOT_EXPORT_START": {
+        "ko": "Godot export 실행 ({name}): {command}",
+        "en": "Running Godot export ({name}): {command}",
+        "ja": "Godot export を実行中 ({name}): {command}",
+        "zh": "正在运行 Godot export ({name}): {command}",
+    },
+    "GODOT_BUILD_DONE": {
+        "ko": "Godot 빌드 완료 ({seconds}s)",
+        "en": "Godot build complete ({seconds}s)",
+        "ja": "Godot ビルド完了 ({seconds}s)",
+        "zh": "Godot 构建完成 ({seconds}s)",
+    },
     "ASC_MACOS_ONLY": {
         "ko": "App Store Connect 업로드는 macOS에서만 실행할 수 있습니다.",
         "en": "App Store Connect uploads can only run on macOS.",
@@ -635,6 +683,48 @@ MESSAGES: dict[str, dict[str, str]] = {
         "ja": "Swift/Objective-C のネイティブコンパイルは、それ自体では難読化を保証しません",
         "zh": "Swift/Objective-C 原生编译本身并不保证混淆",
     },
+    "AUDIT_GODOT_RELEASE_EXPORT": {
+        "ko": "godot --export-release로만 빌드 — 디버그 export 템플릿을 쓰지 않음",
+        "en": "Always builds with godot --export-release — never the debug export templates",
+        "ja": "常に godot --export-release でビルド — デバッグ export テンプレートは使いません",
+        "zh": "始终使用 godot --export-release 构建 — 不使用调试 export 模板",
+    },
+    "AUDIT_GODOT_NO_PRESETS": {
+        "ko": "export_presets.cfg가 없거나 preset이 하나도 없음",
+        "en": "export_presets.cfg is missing or has no presets",
+        "ja": "export_presets.cfg が無いか、preset が一つもありません",
+        "zh": "export_presets.cfg 不存在或没有任何 preset",
+    },
+    "AUDIT_GODOT_SCRIPT_ENCRYPTED": {
+        "ko": "preset \"{name}\": script_export_mode=Encrypted — GDScript가 암호화된 바이트코드로 export됨",
+        "en": "preset \"{name}\": script_export_mode=Encrypted — GDScript exports as encrypted bytecode",
+        "ja": "preset \"{name}\": script_export_mode=Encrypted — GDScript は暗号化バイトコードとして export されます",
+        "zh": "preset \"{name}\": script_export_mode=Encrypted — GDScript 以加密字节码形式导出",
+    },
+    "AUDIT_GODOT_SCRIPT_COMPILED": {
+        "ko": "preset \"{name}\": script_export_mode=Compiled — 원문 GDScript는 아니지만 암호화는 아님",
+        "en": "preset \"{name}\": script_export_mode=Compiled — not source GDScript, but not encrypted either",
+        "ja": "preset \"{name}\": script_export_mode=Compiled — 生の GDScript ではありませんが暗号化もされていません",
+        "zh": "preset \"{name}\": script_export_mode=Compiled — 并非原始 GDScript 源码，但也未加密",
+    },
+    "AUDIT_GODOT_SCRIPT_TEXT": {
+        "ko": "preset \"{name}\": script_export_mode=Text — GDScript 원문이 그대로 export됨",
+        "en": "preset \"{name}\": script_export_mode=Text — GDScript source ships as plain text",
+        "ja": "preset \"{name}\": script_export_mode=Text — GDScript ソースがそのまま export されます",
+        "zh": "preset \"{name}\": script_export_mode=Text — GDScript 源码以纯文本形式导出",
+    },
+    "AUDIT_GODOT_PCK_ENCRYPTED": {
+        "ko": "preset \"{name}\": encrypt_pck=true — PCK 전체가 암호화됨",
+        "en": "preset \"{name}\": encrypt_pck=true — the whole PCK is encrypted",
+        "ja": "preset \"{name}\": encrypt_pck=true — PCK 全体が暗号化されています",
+        "zh": "preset \"{name}\": encrypt_pck=true — 整个 PCK 已加密",
+    },
+    "AUDIT_GODOT_PCK_NOT_ENCRYPTED": {
+        "ko": "preset \"{name}\": encrypt_pck=false — 리소스·씬을 도구로 그대로 추출 가능",
+        "en": "preset \"{name}\": encrypt_pck=false — resources and scenes can be extracted as-is with common tools",
+        "ja": "preset \"{name}\": encrypt_pck=false — リソースやシーンは一般的なツールでそのまま抽出できます",
+        "zh": "preset \"{name}\": encrypt_pck=false — 资源和场景可被常见工具原样提取",
+    },
     "XCODE_CONTAINER_NOT_FOUND": {
         "ko": "Xcode workspace/project를 찾을 수 없습니다: {directory}",
         "en": "Could not find an Xcode workspace/project: {directory}",
@@ -910,7 +1000,7 @@ MESSAGES: dict[str, dict[str, str]] = {
 
 지원 타입:
   tauri, flutter, android, kotlin-multiplatform, kotlin, gradle,
-  react, next, node, ios-xcode
+  react, next, node, ios-xcode, godot
 """,
         "en": """Universal Build Script
 
@@ -946,7 +1036,7 @@ Main options:
 
 Supported types:
   tauri, flutter, android, kotlin-multiplatform, kotlin, gradle,
-  react, next, node, ios-xcode
+  react, next, node, ios-xcode, godot
 """,
         "ja": """Universal Build Script
 
@@ -982,7 +1072,7 @@ Supported types:
 
 サポートするタイプ:
   tauri, flutter, android, kotlin-multiplatform, kotlin, gradle,
-  react, next, node, ios-xcode
+  react, next, node, ios-xcode, godot
 """,
         "zh": """Universal Build Script
 
@@ -1018,7 +1108,7 @@ Supported types:
 
 支持的类型:
   tauri, flutter, android, kotlin-multiplatform, kotlin, gradle,
-  react, next, node, ios-xcode
+  react, next, node, ios-xcode, godot
 """,
     },
 }
