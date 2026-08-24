@@ -149,4 +149,73 @@ assert ubs.split_cli_arguments(value, windows=True) == [
 ]
 PY
 
+# Godot: export_presets.cfg의 실제 preset들이 detect/audit/plan/build 전체에서
+# 올바르게 읽히는지 확인한다 — encrypt_pck·script_export_mode는 preset마다 다르다.
+mkdir -p "$FIXTURE/godot"
+printf '%s\n' '[application]' 'config/name="Demo"' 'config/version="0.1.0"' \
+  > "$FIXTURE/godot/project.godot"
+printf '%s\n' \
+  '[preset.0]' '' 'name="iOS"' 'platform="iOS"' \
+  'export_path="build/ios/demo.ipa"' 'encrypt_pck=false' 'encrypt_directory=false' \
+  'script_export_mode=2' '' '[preset.0.options]' '' \
+  'application/bundle_identifier="com.example.demo"' '' \
+  '[preset.1]' '' 'name="Android"' 'platform="Android"' \
+  'export_path="build/android/demo.apk"' 'encrypt_pck=true' 'encrypt_directory=false' \
+  'script_export_mode=0' '' '[preset.1.options]' '' \
+  'package/unique_name="com.example.demo"' \
+  > "$FIXTURE/godot/export_presets.cfg"
+
+GODOT_AUDIT="$("$ROOT/build.sh" audit --json "$FIXTURE/godot")"
+printf '%s' "$GODOT_AUDIT" | python3 -c '
+import json, sys
+items = json.load(sys.stdin)
+by_check = {item["check"]: item["status"] for item in items}
+assert by_check["release-export"] == "enforced"
+assert by_check["script-export-mode:iOS"] == "configured"
+assert by_check["encrypt-pck:iOS"] == "not-configured"
+assert by_check["script-export-mode:Android"] == "not-configured"
+assert by_check["encrypt-pck:Android"] == "configured"
+'
+
+GODOT_PLAN_ANDROID="$(UBS_GODOT_PLATFORM=android "$ROOT/build.sh" plan --json "$FIXTURE/godot")"
+printf '%s' "$GODOT_PLAN_ANDROID" | python3 -c '
+import json, sys
+item = json.load(sys.stdin)[0]
+assert item["adapter"] == "scripts/ubs.py#godot"
+presets = item["options"]["presets"]
+assert len(presets) == 1
+assert presets[0]["name"] == "Android"
+assert presets[0]["export_path"] == "build/android/demo.apk"
+'
+
+if UBS_GODOT_PRESET=DoesNotExist "$ROOT/build.sh" plan --json "$FIXTURE/godot" >/dev/null 2>&1; then
+  echo "존재하지 않는 UBS_GODOT_PRESET을 허용했습니다." >&2
+  exit 1
+fi
+
+printf '%s\n' '#!/usr/bin/env bash' 'printf "%s\n" "$*" >> "$UBS_TEST_LOG"' \
+  > "$FIXTURE/bin/godot"
+chmod +x "$FIXTURE/bin/godot"
+PATH="$FIXTURE/bin:$PATH" UBS_TEST_LOG="$FIXTURE/godot.log" UBS_GODOT_PLATFORM=android \
+  "$ROOT/build.sh" build --project "$FIXTURE/godot"
+# $FIXTURE는 macOS에서 /var/folders/... (=> /private/var/folders/...로 심볼릭 링크)라
+# 로그에 찍힌 canonicalize된 절대경로와 접두어가 다를 수 있다 — 의미 있는 부분(플래그·
+# preset 이름·상대 출력 경로 꼬리)만 확인한다.
+grep -Fq -- '--headless --path' "$FIXTURE/godot.log" || {
+  echo "Godot adapter가 --headless --path를 전달하지 않았습니다." >&2
+  exit 1
+}
+grep -Fq -- '--export-release Android' "$FIXTURE/godot.log" || {
+  echo "Godot adapter가 Android preset으로 export-release를 실행하지 않았습니다." >&2
+  exit 1
+}
+grep -Eq -- '/godot/build/android/demo\.apk( |$)' "$FIXTURE/godot.log" || {
+  echo "Godot adapter가 preset의 export_path로 출력하지 않았습니다." >&2
+  exit 1
+}
+[ -d "$FIXTURE/godot/build/android" ] || {
+  echo "Godot adapter가 export_path의 상위 디렉터리를 만들지 않았습니다." >&2
+  exit 1
+}
+
 echo "Python adapter·선택·캐시 테스트 통과"

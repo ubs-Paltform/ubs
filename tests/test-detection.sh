@@ -96,6 +96,29 @@ assert len(items) == 1
 assert items[0]["type"] == "node"
 '
 
+# Godot는 project.godot 하나로 감지된다 — bash detect.sh와 Python 코어 양쪽에서 확인한다
+# (이 저장소는 두 구현을 나란히 유지하며 서로 어긋나지 않아야 한다).
+GODOT_FIXTURE="$(mktemp -d)"
+GODOT_FIXTURE="$(canonical_dir "$GODOT_FIXTURE")"
+printf '%s\n' '[application]' 'config/name="Demo"' 'config/version="0.1.0"' \
+  > "$GODOT_FIXTURE/project.godot"
+[ "$(detect_project_type "$GODOT_FIXTURE")" = godot ] || {
+  echo "bash detect_project_type이 Godot 프로젝트를 인식하지 못했습니다." >&2
+  exit 1
+}
+GODOT_SCAN="$(scan_projects "$GODOT_FIXTURE")"
+[ "$GODOT_SCAN" = "godot"$'\t'"$GODOT_FIXTURE" ] || {
+  echo "bash scan_projects가 Godot 프로젝트를 인식하지 못했습니다: $GODOT_SCAN" >&2
+  exit 1
+}
+GODOT_DETECT_JSON="$(bash "$REPO_DIR/build.sh" detect --json "$GODOT_FIXTURE")"
+printf '%s' "$GODOT_DETECT_JSON" | python3 -c '
+import json, sys
+items = json.load(sys.stdin)
+assert len(items) == 1 and items[0]["type"] == "godot", items
+'
+rm -rf "$GODOT_FIXTURE"
+
 AUDIT_JSON="$(bash "$REPO_DIR/build.sh" audit --json "$FIXTURE")"
 printf '%s' "$AUDIT_JSON" | python3 -c '
 import json, sys
