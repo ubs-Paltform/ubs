@@ -74,6 +74,11 @@ detect_project_type() {
     return 0
   fi
 
+  if [ -f "$dir/project.godot" ]; then
+    echo "godot"
+    return 0
+  fi
+
   if [ -f "$dir/gradlew" ] || [ -f "$dir/settings.gradle" ] || \
      [ -f "$dir/settings.gradle.kts" ] || [ -f "$dir/build.gradle" ] || \
      [ -f "$dir/build.gradle.kts" ]; then
@@ -128,7 +133,8 @@ scan_projects() {
       -o -name target -o -name .gradle -o -name .dart_tool -o -name .next \) -prune \) \
     -o \( -type d \( -name '*.xcworkspace' -o -name '*.xcodeproj' \) -print -prune \) \
     -o \( -type f \( -name pubspec.yaml -o -name tauri.conf.json \
-      -o -name settings.gradle -o -name settings.gradle.kts -o -name package.json \) -print \) \
+      -o -name settings.gradle -o -name settings.gradle.kts -o -name package.json \
+      -o -name project.godot \) -print \) \
     2>/dev/null |
   while IFS= read -r marker; do
     case "$marker" in

@@ -53,7 +53,7 @@ NODE_CONFIGS = (
 )
 MARKER_NAMES = {
     "pubspec.yaml", "tauri.conf.json", "settings.gradle",
-    "settings.gradle.kts", "package.json",
+    "settings.gradle.kts", "package.json", "project.godot",
 }
 XCODE_SUFFIXES = (".xcworkspace", ".xcodeproj")
 ADAPTERS = {
@@ -67,11 +67,13 @@ ADAPTERS = {
     "next": "scripts/ubs.py#node",
     "node": "scripts/ubs.py#node",
     "ios-xcode": "scripts/ubs.py#xcode",
+    "godot": "scripts/ubs.py#godot",
 }
 PYTHON_ADAPTER_TYPES = {
     "android", "kotlin-multiplatform", "kotlin", "gradle",
-    "react", "next", "node", "ios-xcode",
+    "react", "next", "node", "ios-xcode", "godot",
 }
+GODOT_SCRIPT_EXPORT_MODE_NAMES = {0: "text", 1: "compiled", 2: "encrypted"}
 
 GREEN = "\033[0;32m"
 YELLOW = "\033[1;33m"
@@ -580,6 +582,121 @@ def run_xcode_adapter(directory: Path, environment: Dict[str, str]) -> int:
     return status
 
 
+def godot_presets(directory: Path) -> List[dict]:
+    """Parse export_presets.cfg into preset dicts. Returns [] if missing/empty — safe for audit."""
+    presets: List[dict] = []
+    current: Optional[dict] = None
+    in_options = False
+    for raw_line in read_text(directory / "export_presets.cfg").splitlines():
+        line = raw_line.strip()
+        if re.match(r"^\[preset\.\d+\]$", line):
+            if current and current.get("name"):
+                presets.append(current)
+            current = {"platform": "", "export_path": "", "encrypt_pck": False, "script_export_mode": 0}
+            in_options = False
+            continue
+        if re.match(r"^\[preset\.\d+\.options\]$", line):
+            in_options = True
+            continue
+        if current is None or in_options or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key, value = key.strip(), value.strip().strip('"')
+        if key == "name":
+            current["name"] = value
+        elif key == "platform":
+            current["platform"] = value
+        elif key == "export_path":
+            current["export_path"] = value
+        elif key == "encrypt_pck":
+            current["encrypt_pck"] = value == "true"
+        elif key == "script_export_mode":
+            try:
+                current["script_export_mode"] = int(value)
+            except ValueError:
+                pass
+    if current and current.get("name"):
+        presets.append(current)
+    return presets
+
+
+def godot_selected_presets(directory: Path, environment: Dict[str, str]) -> List[dict]:
+    presets = godot_presets(directory)
+    explicit = environment.get("UBS_GODOT_PRESET", "").strip()
+    if explicit:
+        matches = [preset for preset in presets if preset["name"] == explicit]
+        if not matches:
+            raise ValueError(t("GODOT_PRESET_NOT_FOUND", name=explicit))
+        return matches
+    platform_filter = environment.get("UBS_GODOT_PLATFORM", "auto")
+    if platform_filter == "ios":
+        selected = [preset for preset in presets if preset["platform"] == "iOS"]
+    elif platform_filter == "android":
+        selected = [preset for preset in presets if preset["platform"] == "Android"]
+    else:
+        selected = list(presets)
+    if not selected:
+        raise ValueError(t("GODOT_NO_MATCHING_PRESET", platform=platform_filter))
+    return selected
+
+
+def godot_plan(directory: Path, environment: Dict[str, str]) -> dict:
+    presets = godot_selected_presets(directory, environment)
+    return {
+        "executable": environment.get("UBS_GODOT_BIN", "godot"),
+        "platform": environment.get("UBS_GODOT_PLATFORM", "auto"),
+        "presets": [
+            {
+                "name": preset["name"],
+                "platform": preset["platform"],
+                "export_path": preset["export_path"],
+                "encrypt_pck": preset["encrypt_pck"],
+                "script_export_mode": GODOT_SCRIPT_EXPORT_MODE_NAMES.get(
+                    preset["script_export_mode"], "text"),
+            }
+            for preset in presets
+        ],
+        "flags": split_cli_arguments(environment.get("UBS_GODOT_FLAGS", "")),
+    }
+
+
+def run_godot_adapter(directory: Path, environment: Dict[str, str]) -> int:
+    try:
+        plan = godot_plan(directory, environment)
+    except ValueError as error:
+        eprint(f"{RED}{error}{NC}")
+        return 2
+    executable = str(plan["executable"])
+    if shutil.which(executable, path=environment.get("PATH")) is None:
+        eprint(f"{RED}{t('GODOT_BIN_NOT_FOUND', executable=executable)}{NC}")
+        return 1
+    started = time.monotonic()
+    status = 0
+    for preset in plan["presets"]:
+        if preset["platform"] == "iOS" and platform.system() != "Darwin":
+            if plan["platform"] == "auto":
+                print(f"{YELLOW}{t('GODOT_IOS_SKIPPED_NON_MACOS', name=preset['name'])}{NC}")
+                continue
+            eprint(f"{RED}{t('GODOT_IOS_MACOS_ONLY')}{NC}")
+            return 1
+        if not preset["export_path"]:
+            eprint(f"{RED}{t('GODOT_PRESET_NO_EXPORT_PATH', name=preset['name'])}{NC}")
+            return 2
+        output = directory / str(preset["export_path"])
+        output.parent.mkdir(parents=True, exist_ok=True)
+        command = [
+            executable, "--headless", "--path", str(directory),
+            "--export-release", str(preset["name"]), str(output), *plan["flags"],
+        ]
+        print(f"{CYAN}{t('GODOT_EXPORT_START', name=preset['name'], command=' '.join(command))}{NC}")
+        status = run_command(command, directory, environment)
+        if status != 0:
+            return status
+    if status == 0:
+        print(f"{GREEN}{t('GODOT_BUILD_DONE', seconds=int(time.monotonic() - started))}{NC}")
+    return status
+
+
 def run_python_adapter(kind: str, directory: Path, environment: Dict[str, str]) -> int:
     if kind in {"react", "next", "node"}:
         return run_node_adapter(directory, environment)
@@ -587,6 +704,8 @@ def run_python_adapter(kind: str, directory: Path, environment: Dict[str, str]) 
         return run_gradle_adapter(kind, directory, environment)
     if kind == "ios-xcode":
         return run_xcode_adapter(directory, environment)
+    if kind == "godot":
+        return run_godot_adapter(directory, environment)
     raise ValueError(t("ADAPTER_TYPE_UNSUPPORTED", kind=kind))
 
 
@@ -617,6 +736,8 @@ def detect_project_type(directory: Path) -> Optional[str]:
         return "flutter"
     if xcode_container(directory):
         return "ios-xcode"
+    if (directory / "project.godot").is_file():
+        return "godot"
     gradle_markers = (
         "gradlew", "settings.gradle", "settings.gradle.kts",
         "build.gradle", "build.gradle.kts",
@@ -789,6 +910,26 @@ def audit_project(project: Project) -> List[dict]:
         add("obfuscation", "native-symbol-strip", "configured" if stripped else "project-default",
             t("AUDIT_XCODE_SYMBOL_STRIP_CONFIGURED") if stripped else t("AUDIT_XCODE_SYMBOL_STRIP_DEFAULT"))
         add("obfuscation", "swift-native", "compiled", t("AUDIT_XCODE_NATIVE_COMPILED"))
+    elif kind == "godot":
+        add("optimization", "release-export", "enforced", t("AUDIT_GODOT_RELEASE_EXPORT"))
+        presets = godot_presets(directory)
+        if not presets:
+            add("obfuscation", "script-export-mode", "not-configured", t("AUDIT_GODOT_NO_PRESETS"))
+        for preset in presets:
+            mode = preset["script_export_mode"]
+            if mode >= 2:
+                add("obfuscation", f"script-export-mode:{preset['name']}", "configured",
+                    t("AUDIT_GODOT_SCRIPT_ENCRYPTED", name=preset["name"]))
+            elif mode == 1:
+                add("obfuscation", f"script-export-mode:{preset['name']}", "partial",
+                    t("AUDIT_GODOT_SCRIPT_COMPILED", name=preset["name"]))
+            else:
+                add("obfuscation", f"script-export-mode:{preset['name']}", "not-configured",
+                    t("AUDIT_GODOT_SCRIPT_TEXT", name=preset["name"]))
+            add("obfuscation", f"encrypt-pck:{preset['name']}",
+                "configured" if preset["encrypt_pck"] else "not-configured",
+                t("AUDIT_GODOT_PCK_ENCRYPTED", name=preset["name"]) if preset["encrypt_pck"]
+                else t("AUDIT_GODOT_PCK_NOT_ENCRYPTED", name=preset["name"]))
     return items
 
 
@@ -831,6 +972,8 @@ def plan_item(project: Project, options: Options) -> dict:
         })
     elif project.type == "ios-xcode":
         values.update(xcode_plan(project.path, environment))
+    elif project.type == "godot":
+        values.update(godot_plan(project.path, environment))
     else:
         workspace = node_workspace_root(project.path)
         manager = detect_node_package_manager(project.path)
@@ -855,6 +998,7 @@ ARTIFACT_PATTERNS = {
     "gradle": ["**/build/libs/*"],
     "react": ["dist", "build"], "next": [".next"], "node": ["dist", "build"],
     "ios-xcode": ["build/ubs/*.xcarchive", "build/ubs/export/*.ipa"],
+    "godot": ["build/ios/*.ipa", "build/android/*.apk", "build/android/*.aab", "build/web", "build/macos/*.zip", "build/linux/*", "build/windows/*"],
 }
 DIRECTORY_PATTERNS = {
     "build/web", "dist", "build", ".next", "src-tauri/target/release/bundle/*/*",

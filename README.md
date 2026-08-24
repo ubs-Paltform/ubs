@@ -1,6 +1,6 @@
 # ubs
 
-**Universal release build orchestrator for Flutter, Tauri, Android/Kotlin, React/Node, and iOS/Xcode — one command, auto-detected, AI-agent and MCP ready.**
+**Universal release build orchestrator for Flutter, Tauri, Android/Kotlin, React/Node, iOS/Xcode, and Godot — one command, auto-detected, AI-agent and MCP ready.**
 
 `ubs` (entry point `./build.sh`) is a Bash + Python CLI that detects what kind of project — or monorepo of projects — you're standing in, resolves inter-project build dependencies into a topological order, and runs the right platform-specific build adapter. It ships with safe interactive defaults, a non-interactive/CI mode, parallel builds of independent projects, an optimization/obfuscation audit, App Store Connect and Google Play publishing, a signed and atomic self-update mechanism, and CLI output localized into `ko`/`en`/`ja`/`zh`. A bundled MCP server exposes the same detect/audit/plan/graph/build surface to AI agents.
 
@@ -28,7 +28,7 @@ This document is grounded entirely in the current `build.sh`, `install.sh`, `scr
 
 Given a project directory (or a monorepo root), `ubs`:
 
-1. **Detects** every buildable sub-project by inspecting the filesystem — no config file required — and classifies each into one of ten supported types.
+1. **Detects** every buildable sub-project by inspecting the filesystem — no config file required — and classifies each into one of eleven supported types.
 2. **Resolves dependencies** between detected projects (via inferred Node workspace/package-name links, or an explicit `ubs.dependencies.json`) into topologically ordered layers.
 3. **Plans** the exact build command for each project — read-only, so it's safe to inspect before anything runs.
 4. **Builds** each project through its adapter, in parallel across independent projects when `--jobs N > 1`, with a safe interactive version-bump/platform prompt on a real terminal and deterministic non-interactive defaults everywhere else (CI, MCP, `UBS_NON_INTERACTIVE=true`).
@@ -54,11 +54,13 @@ flowchart TB
     Adapter -->|"android/kotlin*/gradle"| BGradle["ubs.py#gradle\nrun_gradle_adapter"]
     Adapter -->|"react/next/node"| BNode["ubs.py#node\nrun_node_adapter"]
     Adapter -->|"ios-xcode"| BXcode["ubs.py#xcode\nrun_xcode_adapter"]
+    Adapter -->|"godot"| BGodot["ubs.py#godot\nrun_godot_adapter"]
     BTauri --> Report["BuildReport\n+ artifact_output_directories"]
     BFlutter --> Report
     BGradle --> Report
     BNode --> Report
     BXcode --> Report
+    BGodot --> Report
     Report -->|"--publish or prompted"| Publish["publish_projects\nApp Store Connect / Google Play"]
 ```
 
@@ -175,6 +177,7 @@ UBS_NON_INTERACTIVE=true ./build.sh --all --version-bump patch --jobs 4 --report
 | `next` | `package.json` with a Next.js dependency | `ubs.py#node` |
 | `node` | `package.json` with a `build` script, no more specific framework | `ubs.py#node` |
 | `ios-xcode` | `*.xcodeproj` with no Flutter/Tauri wrapper | `ubs.py#xcode` |
+| `godot` | `project.godot` | `ubs.py#godot` |
 
 ## Build adapters in depth
 
@@ -225,6 +228,24 @@ For a directory with an `*.xcworkspace`/`*.xcodeproj` and no Tauri/Flutter wrapp
 UBS_XCODE_SCHEME=MyApp UBS_XCODE_EXPORT=true \
   UBS_XCODE_EXPORT_OPTIONS=ExportOptions.plist ./build.sh --type ios-xcode
 ```
+
+### Godot
+
+`ubs.py#godot` parses every `[preset.N]` block in `export_presets.cfg` (name, `platform`, `export_path`, `encrypt_pck`, `script_export_mode`) and runs `godot --headless --path <dir> --export-release "<preset name>" <export_path>` once per selected preset — always `--export-release`, never a debug export template. `UBS_GODOT_PLATFORM` selects which presets run: `auto` (default, every preset in the file), `ios`, or `android`; `UBS_GODOT_PRESET=<name>` overrides platform filtering and picks exactly one preset by name. An iOS preset is skipped with a warning under `auto` on a non-macOS host, or fails outright if iOS was requested explicitly (`godot`'s own iOS export shells out to `xcodebuild`, so it needs the same macOS host `ios-xcode` does). `UBS_GODOT_BIN` overrides the `godot` executable (default: whatever `godot` resolves to on `PATH`), and `UBS_GODOT_FLAGS` appends extra arguments to the export command.
+
+```bash
+# Every preset in export_presets.cfg
+./build.sh --type godot
+
+# Just the Android preset(s), with a non-default Godot binary
+UBS_GODOT_PLATFORM=android UBS_GODOT_BIN=/Applications/Godot.app/Contents/MacOS/Godot \
+  ./build.sh --type godot
+
+# One named preset by hand
+UBS_GODOT_PRESET="iOS" ./build.sh --type godot
+```
+
+The audit (`./build.sh audit`) reads the same parsed presets without building: `release-export` is always `enforced` (the adapter never uses a debug export), and each preset gets its own `script-export-mode:<name>` (`Text`/`Compiled`/`Encrypted` — GDScript's own obfuscation knob) and `encrypt-pck:<name>` (whether the exported PCK is encrypted) checks.
 
 ### React, Next.js & Node
 
