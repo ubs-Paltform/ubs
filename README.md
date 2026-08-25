@@ -147,6 +147,22 @@ flowchart TD
 | `--report-json <file>` | path | Write the actual (not planned) build result as JSON |
 | `--track` | Google Play track | `internal\|alpha\|beta\|production` for `publish` |
 
+### Tauri build number (macOS)
+
+`src-tauri/tauri.conf.json` carries two versions: the top-level `version`
+(CFBundleShortVersionString, the number users see) and `bundle.macOS.bundleVersion`
+(CFBundleVersion, the build number). App Store Connect rejects an upload whose
+CFBundleVersion is not higher than the last one it accepted, even when the marketing
+version changed — so the macOS Tauri adapter bumps the last numeric component of
+`bundleVersion` on every build that is not cancelled (`0.1.37` → `0.1.38`), independent
+of the version choice, and restores it if the build fails.
+
+- Only applies when `bundle.macOS.bundleVersion` already exists; the key is never created.
+- `--version-bump build` keeps the marketing version and bumps only the build number.
+- Non-interactive `--version-bump none` leaves both untouched, so agent builds do not
+  dirty the working tree.
+- `UBS_BUNDLE_VERSION_BUMP=none` disables the bump; `=auto` forces it back on.
+
 ```bash
 # Auto-detect everything under the current directory and build with safe defaults
 ./build.sh
