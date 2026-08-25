@@ -68,25 +68,84 @@ set_tauri_version() {
 import re, sys
 path, new_version = sys.argv[1], sys.argv[2]
 content = open(path).read()
-content = re.sub(r'("version":\s*")[^"]+(")', rf'\g<1>{new_version}\g<2>', content, count=1)
+# 최상위(2-space 들여쓰기) "version" 키만 치환 — 들여쓰기 앵커 없이 첫 매치만 바꾸면
+# bundle/plugins 등 중첩 설정의 "version" 필드를 잘못 건드릴 수 있다.
+content, count = re.subn(
+    r'^(  "version":\s*")[^"]+(")', rf'\g<1>{new_version}\g<2>', content, count=1, flags=re.MULTILINE
+)
+if count == 0:
+    sys.exit(f'top-level "version" key not found: {path}')
 open(path, "w").write(content)
 PYEOF
 }
 
+# 빌드 번호(CFBundleVersion) — App Store Connect는 같은 빌드 번호의 재업로드를 거부한다.
+# tauri.conf.json의 bundle.macOS.bundleVersion 이 있을 때만 다룬다(없으면 Tauri가 version을 그대로 쓴다).
+CURRENT_BUNDLE_VERSION="$(python3 - "$CONF" <<'PYEOF'
+import json, sys
+try:
+    config = json.load(open(sys.argv[1]))
+except (OSError, json.JSONDecodeError):
+    print("")
+    sys.exit(0)
+bundle = config.get("bundle") or {}
+macos = bundle.get("macOS") or {}
+value = macos.get("bundleVersion")
+print(value if isinstance(value, str) else "")
+PYEOF
+)"
+BUNDLE_VERSION_CHANGED=false
+
+set_tauri_bundle_version() {
+  local version="$1"
+  python3 - "$CONF" "$version" <<'PYEOF'
+import re, sys
+path, new_version = sys.argv[1], sys.argv[2]
+content = open(path).read()
+content, count = re.subn(
+    r'("bundleVersion":\s*")[^"]+(")', rf'\g<1>{new_version}\g<2>', content, count=1
+)
+if count == 0:
+    sys.exit(f'"bundleVersion" key not found: {path}')
+open(path, "w").write(content)
+PYEOF
+}
+
+# 마지막 숫자 컴포넌트만 +1 한다: 0.1.37 -> 0.1.38, 42 -> 43. 숫자로 끝나지 않으면 빈 문자열.
+next_bundle_version() {
+  python3 - "$1" <<'PYEOF'
+import re, sys
+match = re.match(r"^(.*?)(\d+)$", sys.argv[1])
+print(f"{match.group(1)}{int(match.group(2)) + 1}" if match else "")
+PYEOF
+}
+
 restore_version_if_incomplete() {
-  if [ "$VERSION_CHANGED" = true ] && [ "$BUILD_COMPLETED" != true ]; then
+  if [ "$BUILD_COMPLETED" = true ]; then
+    return 0
+  fi
+  if [ "$VERSION_CHANGED" = true ]; then
     set_tauri_version "$CURRENT_VERSION"
     echo -e "${YELLOW}↩️  $(ubs_msg VERSION_RESTORED_INCOMPLETE "$CURRENT_VERSION")${NC}" >&2
+  fi
+  if [ "$BUNDLE_VERSION_CHANGED" = true ]; then
+    set_tauri_bundle_version "$CURRENT_BUNDLE_VERSION"
+    echo -e "${YELLOW}↩️  $(ubs_msg TAURI_BUNDLE_VERSION_RESTORED "$CURRENT_BUNDLE_VERSION")${NC}" >&2
   fi
 }
 trap restore_version_if_incomplete EXIT
 
+# 빌드 번호 상향 정책: auto(기본) | none. 비대화형에서 앱 버전을 유지(none)하면
+# 빌드 번호도 건드리지 않는다 — 에이전트의 일상 빌드가 커밋 대상 파일을 바꾸지 않도록.
+BUNDLE_VERSION_POLICY="${UBS_BUNDLE_VERSION_BUMP:-auto}"
+
 if [ "${UBS_NON_INTERACTIVE:-false}" = "true" ]; then
   case "${UBS_VERSION_BUMP:-none}" in
+    build) VERSION_CHOICE=4 ;;
     patch) VERSION_CHOICE=1 ;;
     minor) VERSION_CHOICE=2 ;;
     major) VERSION_CHOICE=3 ;;
-    none) VERSION_CHOICE=4 ;;
+    none) VERSION_CHOICE=4; BUNDLE_VERSION_POLICY="${UBS_BUNDLE_VERSION_BUMP:-none}" ;;
     *) echo -e "${RED}$(ubs_msg VERSION_BUMP_UNSUPPORTED)${NC}" >&2; exit 2 ;;
   esac
   echo -e "${CYAN}$(ubs_msg VERSION_POLICY_NONINTERACTIVE "${UBS_VERSION_BUMP:-none}")${NC}"
@@ -100,6 +159,12 @@ else
   echo -e "  ${YELLOW}$(ubs_msg TAURI_MENU_OPT_MAJOR_BUMP)${NC}  → ${NEXT_MAJOR}"
   echo -e "  ${YELLOW}$(ubs_msg MENU_OPT_KEEP_VERSION)${NC}"
   echo -e "  ${YELLOW}$(ubs_msg MENU_OPT_CANCEL)${NC}"
+  if [ "$BUNDLE_VERSION_POLICY" = "auto" ] && [ -n "$CURRENT_BUNDLE_VERSION" ]; then
+    PLANNED_BUNDLE_VERSION="$(next_bundle_version "$CURRENT_BUNDLE_VERSION")"
+    if [ -n "$PLANNED_BUNDLE_VERSION" ]; then
+      echo -e "${CYAN}$(ubs_msg TAURI_BUNDLE_VERSION_PLAN "$CURRENT_BUNDLE_VERSION" "$PLANNED_BUNDLE_VERSION")${NC}"
+    fi
+  fi
   read -p "$(ubs_msg CHOICE_PROMPT_1_5)" VERSION_CHOICE
 fi
 
@@ -116,6 +181,19 @@ if [ "$NEW_VERSION" != "$CURRENT_VERSION" ]; then
   set_tauri_version "$NEW_VERSION"
   VERSION_CHANGED=true
   echo -e "${GREEN}✅ $(ubs_msg VERSION_UPDATED "$CURRENT_VERSION" "$NEW_VERSION")${NC}"
+fi
+
+# 빌드 번호는 앱 버전 선택과 무관하게 올린다 — App Store Connect가 요구하는 건
+# CFBundleShortVersionString이 아니라 CFBundleVersion의 단조 증가다.
+if [ "$BUNDLE_VERSION_POLICY" = "auto" ] && [ -n "$CURRENT_BUNDLE_VERSION" ]; then
+  NEW_BUNDLE_VERSION="$(next_bundle_version "$CURRENT_BUNDLE_VERSION")"
+  if [ -n "$NEW_BUNDLE_VERSION" ]; then
+    set_tauri_bundle_version "$NEW_BUNDLE_VERSION"
+    BUNDLE_VERSION_CHANGED=true
+    echo -e "${GREEN}✅ $(ubs_msg TAURI_BUNDLE_VERSION_UPDATED "$CURRENT_BUNDLE_VERSION" "$NEW_BUNDLE_VERSION")${NC}"
+  else
+    echo -e "${YELLOW}$(ubs_msg TAURI_BUNDLE_VERSION_NOT_NUMERIC "$CURRENT_BUNDLE_VERSION")${NC}" >&2
+  fi
 fi
 
 # ==========================================
