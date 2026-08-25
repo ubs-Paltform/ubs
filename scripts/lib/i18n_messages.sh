@@ -140,6 +140,26 @@ UBS_MSG_en_TAURI_MENU_OPT_MAJOR_BUMP="3) Bump major version"
 UBS_MSG_ja_TAURI_MENU_OPT_MAJOR_BUMP="3) メジャーバージョンを上げる"
 UBS_MSG_zh_TAURI_MENU_OPT_MAJOR_BUMP="3) 升级主要版本"
 
+UBS_MSG_ko_TAURI_BUNDLE_VERSION_PLAN="빌드 번호(CFBundleVersion): %s → %s"
+UBS_MSG_en_TAURI_BUNDLE_VERSION_PLAN="Build number (CFBundleVersion): %s -> %s"
+UBS_MSG_ja_TAURI_BUNDLE_VERSION_PLAN="ビルド番号(CFBundleVersion): %s → %s"
+UBS_MSG_zh_TAURI_BUNDLE_VERSION_PLAN="构建号(CFBundleVersion): %s → %s"
+
+UBS_MSG_ko_TAURI_BUNDLE_VERSION_UPDATED="빌드 번호 업데이트: %s → %s"
+UBS_MSG_en_TAURI_BUNDLE_VERSION_UPDATED="Build number updated: %s -> %s"
+UBS_MSG_ja_TAURI_BUNDLE_VERSION_UPDATED="ビルド番号を更新しました: %s → %s"
+UBS_MSG_zh_TAURI_BUNDLE_VERSION_UPDATED="构建号已更新: %s → %s"
+
+UBS_MSG_ko_TAURI_BUNDLE_VERSION_RESTORED="빌드가 완료되지 않아 빌드 번호를 %s 으로 복원했습니다."
+UBS_MSG_en_TAURI_BUNDLE_VERSION_RESTORED="Build did not complete, restored build number to %s."
+UBS_MSG_ja_TAURI_BUNDLE_VERSION_RESTORED="ビルドが完了しなかったため、ビルド番号を %s に復元しました。"
+UBS_MSG_zh_TAURI_BUNDLE_VERSION_RESTORED="构建未完成，构建号已恢复为 %s。"
+
+UBS_MSG_ko_TAURI_BUNDLE_VERSION_NOT_NUMERIC="빌드 번호 %s 가 숫자로 끝나지 않아 자동 상향을 건너뜁니다."
+UBS_MSG_en_TAURI_BUNDLE_VERSION_NOT_NUMERIC="Build number %s does not end with a number, skipping auto bump."
+UBS_MSG_ja_TAURI_BUNDLE_VERSION_NOT_NUMERIC="ビルド番号 %s が数字で終わらないため、自動更新をスキップします。"
+UBS_MSG_zh_TAURI_BUNDLE_VERSION_NOT_NUMERIC="构建号 %s 不以数字结尾，跳过自动递增。"
+
 UBS_MSG_ko_MENU_OPT_KEEP_VERSION="4) 버전 유지"
 UBS_MSG_en_MENU_OPT_KEEP_VERSION="4) Keep current version"
 UBS_MSG_ja_MENU_OPT_KEEP_VERSION="4) バージョンを維持"
