@@ -31,6 +31,12 @@ Find the nearest workspace directory containing `build.sh`. If `scripts/ubs.py` 
 
 4. Read the generated build report and report successes, failures, and artifact paths. Preserve full failing command output when diagnosing.
 
+   For macOS Tauri projects, `--version-bump none` also leaves `bundle.macOS.bundleVersion`
+   (CFBundleVersion) untouched. Any other policy — including `--version-bump build`, which
+   keeps the marketing version — bumps its last numeric component, because App Store Connect
+   rejects an upload that reuses a build number. `UBS_BUNDLE_VERSION_BUMP=none|auto` overrides
+   that per run.
+
 Normal interactive local builds use `UBS_OPEN_OUTPUT=auto` and reveal successful artifact folders after every selected project has finished. Agent, MCP, CI, and redirected runs should explicitly set `UBS_OPEN_OUTPUT=false`; use `true` only when the user asked to open a desktop file manager. Folder opening is best effort and does not change a successful build status.
 
 On its first build in a project, `build.sh` asks a human at a real terminal whether to default to unattended or interactive builds and remembers the answer in `.ubs/config.json`. Agent/MCP/CI runs are never prompted (no TTY), so no extra flag is required; pass `--non-interactive` explicitly only if you want to be certain regardless of environment.
