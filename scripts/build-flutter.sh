@@ -281,6 +281,10 @@ if [ "${UBS_SKIP_CLEAN:-false}" != "true" ]; then
 else
   echo -e "${CYAN}ℹ️  $(ubs_msg SKIP_CLEAN_NOTICE)${NC}"
 fi
+# 각 flutter build 에 --no-pub 를 붙이지 않는다 — pub 단계가 GeneratedPluginRegistrant
+# 재생성을 겸하는데, 여기서 도는 pub get 은 build mode 를 몰라 dev_dependency 플러그인
+# (integration_test 등)까지 등록해 둔다. 그걸 걷어내는 건 release 빌드 자신의 pub 단계라,
+# 건너뛰면 없는 패키지를 컴파일하다 실패한다.
 flutter pub get
 
 # 코드 생성 라이브러리(Freezed, Riverpod 등) 사용 시 주석 해제
@@ -293,8 +297,7 @@ build_android() {
     $DART_DEFINE \
     --obfuscate \
     --split-debug-info=build/app/outputs/symbols \
-    --tree-shake-icons \
-    --no-pub
+    --tree-shake-icons
 }
 
 build_apk() {
@@ -304,8 +307,7 @@ build_apk() {
     --obfuscate \
     --split-debug-info=build/app/outputs/symbols \
     --tree-shake-icons \
-    --split-per-abi \
-    --no-pub
+    --split-per-abi
 }
 
 build_ios() {
@@ -327,16 +329,14 @@ build_ios() {
     $DART_DEFINE \
     --export-options-plist="$export_options" \
     --obfuscate \
-    --split-debug-info=build/ios/outputs/symbols \
-    --no-pub
+    --split-debug-info=build/ios/outputs/symbols
 }
 
 build_web() {
   echo -e "${YELLOW}🌐 $(ubs_msg STEP_BUILD_WEB)${NC}"
   flutter build web --release \
     $DART_DEFINE \
-    --tree-shake-icons \
-    --no-pub
+    --tree-shake-icons
 }
 
 build_macos() {
@@ -361,8 +361,7 @@ build_macos() {
   flutter build macos --release \
     $DART_DEFINE \
     --obfuscate \
-    --split-debug-info=build/macos/outputs/symbols \
-    --no-pub
+    --split-debug-info=build/macos/outputs/symbols
 
   local archive_path="build/macos/Runner.xcarchive"
   rm -rf "$archive_path" "$MACOS_OUT"
