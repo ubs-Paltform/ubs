@@ -9,14 +9,25 @@ set -euo pipefail
 # can't source scripts/lib/i18n.sh. Language detection/messages are embedded
 # inline here and again below in the Python heredoc.
 _ubs_install_lang() {
-  local raw="${UBS_LANG:-${LC_ALL:-${LC_MESSAGES:-${LANG:-en}}}}"
+  local raw="${UBS_LANG:-${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}}"
   local code="${raw%%.*}"
   code="${code%%_*}"
   code="$(printf '%s' "$code" | tr '[:upper:]' '[:lower:]')"
   case "$code" in
-    ko|en|ja|zh) echo "$code" ;;
-    *) echo en ;;
+    ko|en|ja|zh) echo "$code"; return ;;
   esac
+  # Env said nothing usable (unset, or the C/POSIX default a non-login-shell
+  # launch inherits) — ask macOS what language this machine is in.
+  if [ "$(uname -s 2>/dev/null)" = Darwin ] && command -v defaults >/dev/null 2>&1; then
+    code="$(defaults read -g AppleLocale 2>/dev/null)" || code=""
+    code="${code%%.*}"
+    code="${code%%_*}"
+    code="$(printf '%s' "$code" | tr '[:upper:]' '[:lower:]')"
+    case "$code" in
+      ko|en|ja|zh) echo "$code"; return ;;
+    esac
+  fi
+  echo en
 }
 
 command -v python3 >/dev/null 2>&1 || {
@@ -40,6 +51,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path, PurePosixPath
 import re
 import stat
+import sys
 import tempfile
 import time
 from typing import Dict, FrozenSet, List, Optional, Tuple
@@ -55,10 +67,28 @@ def _detect_lang() -> str:
         or os.environ.get("LC_ALL")
         or os.environ.get("LC_MESSAGES")
         or os.environ.get("LANG")
-        or "en"
+        or ""
     )
     code = raw.split(".")[0].split("_")[0].lower()
-    return code if code in ("ko", "en", "ja", "zh") else "en"
+    if code in ("ko", "en", "ja", "zh"):
+        return code
+    # Env said nothing usable (unset, or the C/POSIX default a non-login-shell
+    # launch inherits) — ask macOS what language this machine is in.
+    if sys.platform == "darwin":
+        try:
+            completed = subprocess.run(
+                ["defaults", "read", "-g", "AppleLocale"],
+                capture_output=True,
+                text=True,
+                timeout=2,
+                check=True,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return "en"
+        code = completed.stdout.strip().split(".")[0].split("_")[0].lower()
+        if code in ("ko", "en", "ja", "zh"):
+            return code
+    return "en"
 
 
 _LANG = _detect_lang()

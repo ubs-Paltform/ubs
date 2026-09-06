@@ -347,10 +347,12 @@ MANIFEST_PUBLIC_KEY fingerprint (SHA-256):
 
 ## Localization
 
-CLI output (errors, progress, interactive menus, `--help`) resolves through `UBS_LANG`, falling back to `LC_ALL` → `LC_MESSAGES` → `LANG`, then `en`. Supported: `ko`, `en`, `ja`, `zh`.
+CLI output (errors, progress, interactive menus, `--help`) resolves through `UBS_LANG`, falling back to `LC_ALL` → `LC_MESSAGES` → `LANG`, then — on macOS only — the system language (`defaults read -g AppleLocale`), then `en`. Supported: `ko`, `en`, `ja`, `zh`; anything else at a given step (including `C`/`POSIX`) falls through to the next one.
+
+The macOS step matters because a process started outside a login shell — an IDE, a coding agent, `launchd`, `cron` — inherits `LANG=C.UTF-8` or nothing at all, which used to read as "this user wants English" even on a Korean Mac. It is only consulted when the environment names no supported language, so it costs nothing in a normal terminal.
 
 ```bash
-UBS_LANG=ja ./build.sh detect
+UBS_LANG=ja ./build.sh detect   # env always wins; UBS_LANG=en forces English
 ```
 
 ## Requirements & install
