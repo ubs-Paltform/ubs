@@ -40,7 +40,7 @@ Alternatives considered:
 - Wide windows keep controls on the left and a sticky, full-height build log on the right; narrow windows stack both in one column.
 - The macOS window opens at 1482 × 986 content pixels, matching the 1482 × 1021 reference including the title bar; it remains resizable down to 860 × 620.
 - The build log remains visible before execution, preserves live output and artifacts, and exposes a localized copy action with accessible success or failure feedback.
-- Every reported artifact keeps its exact path visible and provides a direct Finder action.
+- Every reported artifact keeps its exact path visible and provides a direct Finder action below the build command, leaving the log panel output-only.
 - Motion is limited to active progress and short hover transitions; `prefers-reduced-motion` disables it.
 - The operating-system language selects `ko`, `en`, `ja`, or `zh`; all other languages fall back to English.
 - Keyboard focus remains visible. Logs use a live region and never inject HTML.

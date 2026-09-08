@@ -170,11 +170,14 @@
               <span aria-hidden="true">◇</span>
               <span data-i18n="guardrail">Non-interactive · upload disabled</span>
             </div>
-            <button id="cancel-build" class="secondary-button" type="button" hidden data-i18n="cancel">Cancel</button>
-            <button id="start-build" class="primary-button" type="button" disabled>
-              <span data-i18n="startBuild">Start build</span>
-              <span aria-hidden="true">→</span>
-            </button>
+            <div class="run-command-stack">
+              <button id="cancel-build" class="secondary-button" type="button" hidden data-i18n="cancel">Cancel</button>
+              <button id="start-build" class="primary-button" type="button" disabled>
+                <span data-i18n="startBuild">Start build</span>
+                <span aria-hidden="true">→</span>
+              </button>
+              <div id="build-result" class="build-result" aria-live="polite"></div>
+            </div>
           </div>
         </section>
           </div>
@@ -189,7 +192,6 @@
             <span id="copy-log-status" class="visually-hidden" role="status" aria-live="polite"></span>
           </div>
           <pre id="build-log" role="log" aria-live="polite" aria-relevant="additions text"></pre>
-          <div id="build-result" class="build-result" aria-live="polite"></div>
         </section>
         </div>
       </main>

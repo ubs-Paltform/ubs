@@ -147,11 +147,12 @@ for log_layout_contract in (
 ):
     assert log_layout_contract in html
 assert 'id="console-panel" class="console-panel" aria-labelledby="console-heading" hidden' not in html
+assert html.index('id="start-build"') < html.index('id="build-result"') < html.index('id="console-panel"')
 
 styles = (root / "ui/styles.css").read_text(encoding="utf-8")
 for responsive_log_contract in (
     '.workbench {', '.console-panel {\n  position: sticky;', '@media (max-width: 1220px)',
-    'grid-template-columns: 1fr;'
+    'grid-template-columns: 1fr;', '.run-command-stack {'
 ):
     assert responsive_log_contract in styles
 
