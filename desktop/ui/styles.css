@@ -226,33 +226,8 @@ a:focus-visible {
 
 .topbar {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-  margin-bottom: 36px;
-}
-
-.eyebrow {
-  margin: 0 0 10px;
-  color: var(--accent);
-  font-family: var(--mono);
-  font-size: 10px;
-  font-weight: 750;
-  letter-spacing: .17em;
-}
-
-h1 {
-  margin: 0;
-  color: #f2f7fa;
-  font-size: clamp(32px, 5vw, 52px);
-  line-height: .98;
-  letter-spacing: -.045em;
-}
-
-.lede {
-  margin: 14px 0 0;
-  color: var(--muted);
-  font-size: 15px;
+  justify-content: flex-end;
+  margin-bottom: 14px;
 }
 
 .locale-pill {
@@ -1134,15 +1109,6 @@ select {
 @media (max-width: 650px) {
   .workspace {
     padding: 28px 16px 40px;
-  }
-
-  .topbar {
-    display: block;
-  }
-
-  .locale-pill {
-    width: fit-content;
-    margin-top: 18px;
   }
 
   .option-grid {

@@ -29,6 +29,7 @@ Alternatives considered:
 ## Interaction contract
 
 - One cyan primary action per screen.
+- The utility view opens on project controls without a marketing headline.
 - Folder selection always precedes option editing and build execution.
 - Saved project rows persist locally and pair one compact build action with one removable folder target.
 - Finite option groups with five or fewer choices stay visible as segmented buttons instead of dropdowns.

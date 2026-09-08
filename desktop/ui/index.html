@@ -39,11 +39,6 @@
 
       <main id="main" class="workspace">
         <header class="topbar">
-          <div>
-            <p class="eyebrow" data-i18n="eyebrow">RELEASE CONTROL</p>
-            <h1 data-i18n="title">Build with confidence.</h1>
-            <p class="lede" data-i18n="subtitle">Choose a project. UBS handles the release path.</p>
-          </div>
           <div class="locale-pill" aria-label="Interface language">
             <span class="globe" aria-hidden="true">◎</span>
             <span id="locale-name">English</span>
@@ -104,13 +99,10 @@
             </fieldset>
 
             <fieldset class="option-card choice-card jobs-card">
-              <legend data-i18n="jobsLabel">Parallel jobs</legend>
+              <legend data-i18n="jobsLabel">Build mode</legend>
               <div class="segmented-options">
-                <label class="choice-option"><input type="radio" name="jobs" value="0" checked><span data-i18n="jobsAuto">Auto · capped at 4</span></label>
-                <label class="choice-option"><input type="radio" name="jobs" value="1"><span>1</span></label>
-                <label class="choice-option"><input type="radio" name="jobs" value="2"><span>2</span></label>
-                <label class="choice-option"><input type="radio" name="jobs" value="4"><span>4</span></label>
-                <label class="choice-option"><input type="radio" name="jobs" value="8"><span>8</span></label>
+                <label class="choice-option"><input type="radio" name="jobs" value="1"><span data-i18n="jobsSequential">Sequential build</span></label>
+                <label class="choice-option"><input type="radio" name="jobs" value="0" checked><span data-i18n="jobsParallel">Parallel build</span></label>
               </div>
             </fieldset>
 
