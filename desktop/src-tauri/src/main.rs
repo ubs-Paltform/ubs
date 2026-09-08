@@ -133,6 +133,58 @@ fn cancel_build(state: State<'_, BuildState>) -> Result<bool, String> {
     request_cancellation(&state.0)
 }
 
+#[tauri::command]
+fn open_artifact_location(path: String) -> Result<(), String> {
+    let (path, is_file) = canonical_artifact_path(&path)?;
+
+    #[cfg(target_os = "macos")]
+    {
+        let status = finder_command(&path, is_file)
+            .status()
+            .map_err(|error| format!("Finder 실행 실패: {error}"))?;
+        if status.success() {
+            Ok(())
+        } else {
+            Err(format!("Finder가 경로를 열지 못했습니다: {status}"))
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (path, is_file);
+        Err("Finder 열기는 macOS에서만 지원합니다.".to_string())
+    }
+}
+
+fn canonical_artifact_path(raw: &str) -> Result<(PathBuf, bool), String> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return Err("산출물 경로가 비어 있습니다.".to_string());
+    }
+    let path = PathBuf::from(raw)
+        .canonicalize()
+        .map_err(|error| format!("산출물 경로 확인 실패: {error}"))?;
+    if path.is_file() {
+        Ok((path, true))
+    } else if path.is_dir() {
+        Ok((path, false))
+    } else {
+        Err("산출물 경로가 파일 또는 폴더가 아닙니다.".to_string())
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn finder_command(path: &Path, is_file: bool) -> Command {
+    let mut command = Command::new("/usr/bin/open");
+    let folder = if is_file {
+        path.parent().unwrap_or(path)
+    } else {
+        path
+    };
+    command.arg(folder);
+    command
+}
+
 fn request_cancellation(shared: &Arc<Mutex<ProcessSlot>>) -> Result<bool, String> {
     let mut slot = shared
         .lock()
@@ -528,7 +580,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             detect_projects,
             run_build,
-            cancel_build
+            cancel_build,
+            open_artifact_location
         ])
         .build(tauri::generate_context!())
         .expect("UBS desktop 초기화 실패");
@@ -567,6 +620,60 @@ mod tests {
         assert_eq!(
             first.extension().and_then(|value| value.to_str()),
             Some("json")
+        );
+    }
+
+    #[test]
+    fn artifact_paths_are_canonicalized_and_classified() {
+        let root = std::env::temp_dir().join(format!(
+            "ubs-artifact-path-test-{}",
+            temporary_report_path()
+                .file_stem()
+                .expect("temporary file stem")
+                .to_string_lossy()
+        ));
+        fs::create_dir_all(&root).expect("artifact directory");
+        let file = root.join("output artifact.apk");
+        fs::write(&file, b"artifact").expect("artifact file");
+
+        assert_eq!(
+            canonical_artifact_path(""),
+            Err("산출물 경로가 비어 있습니다.".to_string())
+        );
+        assert!(
+            canonical_artifact_path(root.join("missing.apk").to_str().expect("UTF-8 path"))
+                .expect_err("missing artifact must fail")
+                .starts_with("산출물 경로 확인 실패:")
+        );
+        assert_eq!(
+            canonical_artifact_path(root.to_str().expect("UTF-8 path")),
+            Ok((root.canonicalize().expect("canonical directory"), false))
+        );
+        assert_eq!(
+            canonical_artifact_path(file.to_str().expect("UTF-8 path")),
+            Ok((file.canonicalize().expect("canonical file"), true))
+        );
+
+        fs::remove_dir_all(root).expect("test cleanup");
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn finder_opens_artifact_folders_with_argv() {
+        let file = Path::new("/tmp/output artifact.apk");
+        let file_command = finder_command(file, true);
+        assert_eq!(file_command.get_program(), "/usr/bin/open");
+        assert_eq!(
+            file_command.get_args().collect::<Vec<_>>(),
+            vec![Path::new("/tmp").as_os_str()]
+        );
+
+        let directory = Path::new("/tmp/output folder");
+        let directory_command = finder_command(directory, false);
+        assert_eq!(directory_command.get_program(), "/usr/bin/open");
+        assert_eq!(
+            directory_command.get_args().collect::<Vec<_>>(),
+            vec![directory.as_os_str()]
         );
     }
 

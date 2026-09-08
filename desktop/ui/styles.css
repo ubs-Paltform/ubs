@@ -314,7 +314,7 @@ a:focus-visible {
 }
 
 .workspace {
-  width: min(100%, 1080px);
+  width: min(100%, 1480px);
   margin-inline: auto;
   padding: 46px clamp(30px, 5vw, 76px) 56px;
 }
@@ -342,6 +342,22 @@ a:focus-visible {
 .globe {
   color: var(--accent);
   font-size: 14px;
+}
+
+.workbench {
+  display: grid;
+  grid-template-columns: minmax(590px, 1.15fr) minmax(360px, .85fr);
+  align-items: start;
+  gap: 14px;
+}
+
+.controls-column {
+  min-width: 0;
+}
+
+.controls-column > :first-child,
+.workbench > .console-panel {
+  margin-top: 0;
 }
 
 .project-panel,
@@ -643,6 +659,13 @@ select {
   gap: 10px;
 }
 
+.execution-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(220px, 1fr);
+  gap: 10px;
+  margin-top: 10px;
+}
+
 .option-card {
   display: grid;
   gap: 9px;
@@ -667,7 +690,7 @@ select {
 }
 
 .jobs-card {
-  grid-column: span 2;
+  grid-column: auto;
 }
 
 .jobs-card[hidden] + .toggle-card {
@@ -989,6 +1012,14 @@ select {
 }
 
 .console-panel {
+  position: sticky;
+  top: 24px;
+  display: flex;
+  align-self: start;
+  flex-direction: column;
+  height: calc(100vh - 112px);
+  min-height: 420px;
+  max-height: 820px;
   padding: 0;
   background: #080e13;
 }
@@ -1015,15 +1046,67 @@ select {
   margin-right: auto;
 }
 
+.console-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 #elapsed {
   color: #5d707c;
   font-family: var(--mono);
   font-size: 9px;
 }
 
+.console-copy-button {
+  min-width: 76px;
+  padding: 6px 9px;
+  border: 1px solid #31434e;
+  border-radius: 7px;
+  color: #9cafb8;
+  background: #111b23;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 140ms ease, color 140ms ease, background 140ms ease;
+}
+
+.console-copy-button:hover:not(:disabled) {
+  border-color: #4a7773;
+  color: var(--accent);
+  background: #142522;
+}
+
+.console-copy-button.success {
+  border-color: #3f746e;
+  color: var(--accent);
+}
+
+.console-copy-button.error {
+  border-color: #593534;
+  color: var(--danger);
+}
+
+.console-copy-button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 #build-log {
-  min-height: 112px;
-  max-height: 260px;
+  flex: 1 1 auto;
+  min-height: 0;
   margin: 0;
   padding: 16px;
   overflow: auto;
@@ -1037,16 +1120,24 @@ select {
 
 .build-result {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: 8px;
   padding: 12px 16px;
   border-top: 1px solid var(--line-soft);
   color: #748690;
   font-size: 10px;
+  max-height: 190px;
+  overflow: auto;
 }
 
-.build-result strong {
+.build-result-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.build-result-summary strong {
   margin-right: 8px;
 }
 
@@ -1059,7 +1150,7 @@ select {
 }
 
 .build-result code {
-  max-width: 100%;
+  min-width: 0;
   padding: 4px 6px;
   overflow: hidden;
   border-radius: 5px;
@@ -1069,6 +1160,42 @@ select {
   white-space: nowrap;
 }
 
+.artifact-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+}
+
+.artifact-open-button {
+  padding: 5px 8px;
+  border: 1px solid #31534f;
+  border-radius: 6px;
+  color: var(--accent);
+  background: #10211f;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.artifact-open-button:hover:not(:disabled) {
+  border-color: #4a7773;
+  background: #142b28;
+}
+
+.artifact-open-button.error {
+  border-color: #593534;
+  color: var(--danger);
+  background: #211617;
+}
+
+.artifact-open-button:disabled {
+  opacity: .55;
+  cursor: wait;
+}
+
 [hidden] {
   display: none !important;
 }
@@ -1076,6 +1203,25 @@ select {
 @keyframes pulse {
   0%, 100% { box-shadow: 0 0 0 4px rgb(97 214 198 / 8%), 0 0 12px rgb(97 214 198 / 26%); }
   50% { box-shadow: 0 0 0 7px rgb(97 214 198 / 12%), 0 0 18px rgb(97 214 198 / 45%); }
+}
+
+@media (max-width: 1220px) {
+  .workbench {
+    grid-template-columns: 1fr;
+  }
+
+  .workbench > .console-panel {
+    position: static;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    margin-top: 14px;
+  }
+
+  #build-log {
+    min-height: 240px;
+    max-height: 420px;
+  }
 }
 
 @media (max-width: 900px) {
@@ -1122,6 +1268,10 @@ select {
   }
 
   .option-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .execution-grid {
     grid-template-columns: 1fr;
   }
 

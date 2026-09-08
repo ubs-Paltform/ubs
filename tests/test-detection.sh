@@ -312,10 +312,10 @@ grep -Fq 'build apk --release' "$FIXTURE/flutter-outputs.log" || {
   echo "Flutter 다중 출력에서 APK가 실행되지 않았습니다." >&2
   exit 1
 }
-grep -Fq -- '--split-per-abi' "$FIXTURE/flutter-outputs.log" || {
-  echo "Flutter APK에 ABI 분할이 적용되지 않았습니다." >&2
+if grep -Fq -- '--split-per-abi' "$FIXTURE/flutter-outputs.log"; then
+  echo "Flutter APK가 단일 출력 대신 ABI 분할 옵션을 사용했습니다." >&2
   exit 1
-}
+fi
 grep -Fq 'build web --release' "$FIXTURE/flutter-outputs.log" || {
   echo "Flutter 다중 출력에서 Web이 실행되지 않았습니다." >&2
   exit 1
