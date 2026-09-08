@@ -56,6 +56,9 @@ const safe = store.normalizeSettings({ versionBump: "bogus", jobs: 8, clean: "ye
 if (JSON.stringify(safe) !== JSON.stringify({
   versionBump: "none", jobs: 0, clean: false, outputs: ["apk"]
 })) throw new Error("settings normalization contract failed");
+if (JSON.stringify(store.normalizeSettings().outputs) !== JSON.stringify(["appbundle", "ipa"])) {
+  throw new Error("Flutter default outputs contract failed");
+}
 const flutter = { path: "/apps/canary", type: "flutter" };
 let history = store.rememberBuild([], flutter, {
   versionBump: "patch", jobs: 1, clean: true, outputs: ["appbundle", "web"]
@@ -124,6 +127,11 @@ assert html.count('name="version-bump"') == 5
 assert html.count('name="jobs"') == 2
 assert html.count('name="version-bump" value="none" checked') == 1
 assert html.count('name="jobs" value="0" checked') == 1
+assert 'value="auto"' not in html
+assert html.count('value="appbundle" checked') == 1
+assert html.count('value="ipa" checked') == 1
+assert 'class="brand"' not in html
+assert html.index('class="side-meta"') < html.index('id="locale-name"') < html.index('</aside>')
 assert 'data-i18n="jobsSequential"' in html
 assert 'data-i18n="jobsParallel"' in html
 assert '<h1' not in html
@@ -166,6 +174,7 @@ for guardrail in ('"--non-interactive"', '"--no-publish"', "slot.active", "termi
 app = (root / "ui/app.js").read_text(encoding="utf-8")
 for app_contract in ("projectStore", "saveCurrentProject", "syncBuildModeVisibility", "outputCount >= 2", "canonical_directory"):
     assert app_contract in app or app_contract in rust
+assert 'output !== "auto"' not in app
 for copy_log_contract in ('navigator.clipboard?.writeText', 'document.execCommand("copy")', 'copyBuildLog', 'logCopyFailed'):
     assert copy_log_contract in app
 for artifact_folder_contract in ('invoke("open_artifact_location", { path })', 'artifact-open-button', 'openFolderFailed'):
