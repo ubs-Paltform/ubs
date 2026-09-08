@@ -343,16 +343,38 @@ fi
 BUILD_START_TS=$(date +%s)
 
 # shellcheck source=lib/node-package-manager.sh
-source "$SCRIPT_DIR/lib/node-package-manager.sh"
-detect_node_package_manager
-if [ "${UBS_SKIP_INSTALL:-false}" != "true" ]; then
-  echo -e "${BLUE}📥 $(ubs_msg NODE_INSTALL_RUNNING "$NODE_PM")${NC}"
-  install_node_dependencies
+HAS_NODE_PROJECT=false
+if [ -f package.json ]; then
+  HAS_NODE_PROJECT=true
+  source "$SCRIPT_DIR/lib/node-package-manager.sh"
+  detect_node_package_manager
+  if [ "${UBS_SKIP_INSTALL:-false}" != "true" ]; then
+    echo -e "${BLUE}📥 $(ubs_msg NODE_INSTALL_RUNNING "$NODE_PM")${NC}"
+    install_node_dependencies
+  else
+    echo -e "${CYAN}ℹ️  $(ubs_msg SKIP_INSTALL_ENABLED)${NC}"
+  fi
 else
-  echo -e "${CYAN}ℹ️  $(ubs_msg SKIP_INSTALL_ENABLED)${NC}"
+  echo -e "${CYAN}ℹ️  $(ubs_msg TAURI_STATIC_FRONTEND_CARGO)${NC}"
 fi
 
+run_tauri_build() {
+  if [ "$HAS_NODE_PROJECT" = true ]; then
+    run_node_script tauri build -- "$@"
+    return
+  fi
+  command -v cargo >/dev/null 2>&1 || {
+    echo -e "${RED}❌ $(ubs_msg CARGO_TAURI_REQUIRED)${NC}" >&2
+    return 1
+  }
+  cargo tauri build "$@"
+}
+
 if [ "$OBFUSCATE_JS" = "true" ]; then
+  if [ "$HAS_NODE_PROJECT" != true ]; then
+    echo -e "${RED}❌ $(ubs_msg TAURI_STATIC_OBFUSCATION_UNSUPPORTED)${NC}" >&2
+    exit 1
+  fi
   echo -e "${BLUE}🚀 $(ubs_msg STEP_FRONTEND_BUILD_1OF4)${NC}"
   run_node_script build
 
@@ -375,10 +397,10 @@ if [ "$OBFUSCATE_JS" = "true" ]; then
   fi
 
   echo -e "${BLUE}🚀 $(ubs_msg STEP_TAURI_BUILD_3OF4)${NC}"
-  run_node_script tauri build -- --config '{"build":{"beforeBuildCommand":""}}' "${TAURI_TARGET_ARGS[@]}" "$@"
+  run_tauri_build --config '{"build":{"beforeBuildCommand":""}}' "${TAURI_TARGET_ARGS[@]}" "$@"
 else
   echo -e "${BLUE}🚀 $(ubs_msg STEP_TAURI_BUILD_1OF3)${NC}"
-  run_node_script tauri build -- "${TAURI_TARGET_ARGS[@]}" "$@"
+  run_tauri_build "${TAURI_TARGET_ARGS[@]}" "$@"
   echo -e "${CYAN}ℹ️  $(ubs_msg JS_OBFUSCATE_DISABLED_HINT)${NC}"
 fi
 
