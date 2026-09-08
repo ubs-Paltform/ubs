@@ -21,8 +21,8 @@
     projectChoice: document.querySelector("#project-choice"),
     projectList: document.querySelector("#project-list"),
     projectState: document.querySelector("#project-state"),
-    versionBump: document.querySelector("#version-bump"),
-    jobs: document.querySelector("#jobs"),
+    versionBumps: [...document.querySelectorAll('input[name="version-bump"]')],
+    jobs: [...document.querySelectorAll('input[name="jobs"]')],
     cleanBuild: document.querySelector("#clean-build"),
     outputFieldset: document.querySelector("#output-fieldset"),
     outputHint: document.querySelector("#output-hint"),
@@ -82,6 +82,10 @@
     return elements.outputChecks
       .filter((input) => input.checked && input.value !== "auto")
       .map((input) => input.value);
+  }
+
+  function selectedValue(inputs) {
+    return inputs.find((input) => input.checked)?.value;
   }
 
   function syncOutputChecks(changed) {
@@ -184,8 +188,9 @@
   function setRunning(value) {
     running = value;
     elements.chooseFolder.disabled = value;
-    elements.versionBump.disabled = value;
-    elements.jobs.disabled = value;
+    [...elements.versionBumps, ...elements.jobs].forEach((input) => {
+      input.disabled = value;
+    });
     elements.cleanBuild.disabled = value;
     elements.projectList.disabled = value;
     elements.outputFieldset.disabled = value || selectedProject?.type !== "flutter";
@@ -242,9 +247,9 @@
       const result = await invoke("run_build", {
         request: {
           project: selectedProject.path,
-          versionBump: elements.versionBump.value,
+          versionBump: selectedValue(elements.versionBumps),
           outputs: selectedProject.type === "flutter" ? selectedOutputs() : [],
-          jobs: Number(elements.jobs.value),
+          jobs: Number(selectedValue(elements.jobs)),
           clean: elements.cleanBuild.checked,
           locale
         }

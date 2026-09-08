@@ -30,6 +30,7 @@ Alternatives considered:
 
 - One cyan primary action per screen.
 - Folder selection always precedes option editing and build execution.
+- Finite option groups with five or fewer choices stay visible as segmented buttons instead of dropdowns.
 - Pipeline states use text, shape, and color together.
 - Motion is limited to active progress and short hover transitions; `prefers-reduced-motion` disables it.
 - The operating-system language selects `ko`, `en`, `ja`, or `zh`; all other languages fall back to English.

@@ -84,27 +84,27 @@
           </div>
 
           <div class="option-grid">
-            <label class="option-card" for="version-bump">
-              <span data-i18n="versionLabel">Version</span>
-              <select id="version-bump">
-                <option value="none" data-i18n="versionNone">No change</option>
-                <option value="build" data-i18n="versionBuild">Build number</option>
-                <option value="patch" data-i18n="versionPatch">Patch</option>
-                <option value="minor" data-i18n="versionMinor">Minor</option>
-                <option value="major" data-i18n="versionMajor">Major</option>
-              </select>
-            </label>
+            <fieldset class="option-card choice-card version-card">
+              <legend data-i18n="versionLabel">Version</legend>
+              <div class="segmented-options">
+                <label class="choice-option"><input type="radio" name="version-bump" value="none" checked><span data-i18n="versionNone">No change</span></label>
+                <label class="choice-option"><input type="radio" name="version-bump" value="build"><span data-i18n="versionBuild">Build number</span></label>
+                <label class="choice-option"><input type="radio" name="version-bump" value="patch"><span data-i18n="versionPatch">Patch</span></label>
+                <label class="choice-option"><input type="radio" name="version-bump" value="minor"><span data-i18n="versionMinor">Minor</span></label>
+                <label class="choice-option"><input type="radio" name="version-bump" value="major"><span data-i18n="versionMajor">Major</span></label>
+              </div>
+            </fieldset>
 
-            <label class="option-card" for="jobs">
-              <span data-i18n="jobsLabel">Parallel jobs</span>
-              <select id="jobs">
-                <option value="0" data-i18n="jobsAuto">Auto · capped at 4</option>
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="4">4</option>
-                <option value="8">8</option>
-              </select>
-            </label>
+            <fieldset class="option-card choice-card jobs-card">
+              <legend data-i18n="jobsLabel">Parallel jobs</legend>
+              <div class="segmented-options">
+                <label class="choice-option"><input type="radio" name="jobs" value="0" checked><span data-i18n="jobsAuto">Auto · capped at 4</span></label>
+                <label class="choice-option"><input type="radio" name="jobs" value="1"><span>1</span></label>
+                <label class="choice-option"><input type="radio" name="jobs" value="2"><span>2</span></label>
+                <label class="choice-option"><input type="radio" name="jobs" value="4"><span>4</span></label>
+                <label class="choice-option"><input type="radio" name="jobs" value="8"><span>8</span></label>
+              </div>
+            </fieldset>
 
             <label class="option-card toggle-card" for="clean-build">
               <span>
