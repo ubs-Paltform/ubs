@@ -54,6 +54,8 @@
           </div>
         </header>
 
+        <div class="workbench">
+          <div class="controls-column">
         <section class="project-panel" aria-labelledby="project-heading">
           <div class="section-heading">
             <div>
@@ -175,15 +177,21 @@
             </button>
           </div>
         </section>
+          </div>
 
-        <section id="console-panel" class="console-panel" aria-labelledby="console-heading" hidden>
+        <section id="console-panel" class="console-panel" aria-labelledby="console-heading">
           <div class="console-head">
             <h2 id="console-heading" data-i18n="buildLog">Build log</h2>
-            <span id="elapsed">00:00</span>
+            <div class="console-tools">
+              <span id="elapsed">00:00</span>
+              <button id="copy-log" class="console-copy-button" type="button" aria-controls="build-log" disabled data-i18n="copyLog">Copy log</button>
+            </div>
+            <span id="copy-log-status" class="visually-hidden" role="status" aria-live="polite"></span>
           </div>
           <pre id="build-log" role="log" aria-live="polite" aria-relevant="additions text"></pre>
           <div id="build-result" class="build-result" aria-live="polite"></div>
         </section>
+        </div>
       </main>
     </div>
   </body>

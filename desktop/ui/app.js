@@ -26,6 +26,7 @@
   let running = false;
   let timer = null;
   let startedAt = 0;
+  let copyFeedbackTimer = null;
 
   const elements = {
     chooseFolder: document.querySelector("#choose-folder"),
@@ -53,9 +54,10 @@
     runStatus: document.querySelector("#run-status"),
     startBuild: document.querySelector("#start-build"),
     cancelBuild: document.querySelector("#cancel-build"),
-    consolePanel: document.querySelector("#console-panel"),
     buildLog: document.querySelector("#build-log"),
     buildResult: document.querySelector("#build-result"),
+    copyLog: document.querySelector("#copy-log"),
+    copyLogStatus: document.querySelector("#copy-log-status"),
     elapsed: document.querySelector("#elapsed"),
     localeName: document.querySelector("#locale-name")
   };
@@ -348,6 +350,59 @@
     if (logLines.length > 300) logLines.shift();
     elements.buildLog.textContent = logLines.join("\n");
     elements.buildLog.scrollTop = elements.buildLog.scrollHeight;
+    elements.copyLog.disabled = false;
+  }
+
+  function resetCopyFeedback() {
+    if (copyFeedbackTimer) window.clearTimeout(copyFeedbackTimer);
+    copyFeedbackTimer = null;
+    elements.copyLog.className = "console-copy-button";
+    elements.copyLog.textContent = text("copyLog");
+    elements.copyLog.disabled = !elements.buildLog.textContent.trim();
+    elements.copyLogStatus.textContent = "";
+  }
+
+  function showCopyFeedback(key, tone) {
+    if (copyFeedbackTimer) window.clearTimeout(copyFeedbackTimer);
+    const message = text(key);
+    elements.copyLog.className = `console-copy-button ${tone}`;
+    elements.copyLog.textContent = message;
+    elements.copyLogStatus.textContent = message;
+    copyFeedbackTimer = window.setTimeout(resetCopyFeedback, 1800);
+  }
+
+  async function writeClipboard(value) {
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(value);
+        return;
+      } catch {
+        // Fall through for webviews where Clipboard API permission is unavailable.
+      }
+    }
+    const textarea = document.createElement("textarea");
+    textarea.value = value;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.append(textarea);
+    textarea.select();
+    try {
+      if (!document.execCommand("copy")) throw new Error("copy failed");
+    } finally {
+      textarea.remove();
+    }
+  }
+
+  async function copyBuildLog() {
+    const value = elements.buildLog.textContent;
+    if (!value.trim()) return;
+    try {
+      await writeClipboard(value);
+      showCopyFeedback("logCopied", "success");
+    } catch {
+      showCopyFeedback("logCopyFailed", "error");
+    }
   }
 
   function updateElapsed() {
@@ -416,8 +471,8 @@
     let historyResult = "failed";
     logLines.splice(0);
     elements.buildLog.textContent = "";
+    resetCopyFeedback();
     elements.buildResult.replaceChildren();
-    elements.consolePanel.hidden = false;
     elements.runStatus.textContent = text("building");
     elements.runStatus.className = "run-status running";
     setPipeline("build");
@@ -435,7 +490,10 @@
       });
       if (logLines.length === 0) {
         const fallback = [result.stdout, result.stderr].filter(Boolean).join("\n");
-        if (fallback) elements.buildLog.textContent = fallback;
+        if (fallback) {
+          elements.buildLog.textContent = fallback;
+          elements.copyLog.disabled = false;
+        }
       }
       renderResult(result);
       historyResult = result.cancelled ? "cancelled" : result.success ? "success" : "failed";
@@ -496,6 +554,7 @@
     });
     elements.startBuild.addEventListener("click", startBuild);
     elements.cancelBuild.addEventListener("click", cancelBuild);
+    elements.copyLog.addEventListener("click", copyBuildLog);
     if (listen) await listen("build-log", ({ payload }) => appendLog(payload));
     if (!invoke || !openDialog) setProjectState(text("desktopOnly"), "error");
   }
