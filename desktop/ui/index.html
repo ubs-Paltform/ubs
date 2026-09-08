@@ -7,6 +7,7 @@
     <title>UBS</title>
     <link rel="stylesheet" href="styles.css">
     <script src="catalog.js" defer></script>
+    <script src="project-store.js" defer></script>
     <script src="app.js" defer></script>
   </head>
   <body>
@@ -66,6 +67,13 @@
             </span>
             <span class="picker-action" data-i18n="browse">Browse</span>
           </button>
+
+          <div class="project-library-heading">
+            <strong data-i18n="savedProjects">Saved projects</strong>
+            <span id="saved-count">0</span>
+          </div>
+          <div id="saved-projects" class="project-library"></div>
+          <p id="saved-empty" class="project-empty" data-i18n="savedEmpty">Add a folder once and it stays here for the next launch.</p>
 
           <div id="project-choice" class="project-choice" hidden>
             <label for="project-list" data-i18n="detectedProject">Detected project</label>

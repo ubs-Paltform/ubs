@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 node --check desktop/ui/catalog.js
+node --check desktop/ui/project-store.js
 node --check desktop/ui/app.js
 
 node <<'NODE'
@@ -22,6 +23,34 @@ for (const locale of locales) {
   const actual = Object.keys(catalog[locale]).sort().join("\n");
   if (actual !== expected) throw new Error(`catalog key mismatch: ${locale}`);
 }
+NODE
+
+node <<'NODE'
+const fs = require("node:fs");
+const vm = require("node:vm");
+const context = { window: {} };
+vm.runInNewContext(fs.readFileSync("desktop/ui/project-store.js", "utf8"), context);
+const store = context.window.UBS_PROJECT_STORE;
+const values = new Map();
+const storage = {
+  getItem: (key) => values.get(key) ?? null,
+  setItem: (key, value) => values.set(key, value),
+  removeItem: (key) => values.delete(key)
+};
+const saved = [{ path: "/old", type: "tauri" }, { path: "/same", type: "flutter" }];
+const recent = [{ path: "/same", type: "tauri" }, { path: "/new", type: "flutter" }];
+const merged = store.merge(recent, saved);
+if (JSON.stringify(merged) !== JSON.stringify([
+  { path: "/same", type: "tauri" },
+  { path: "/new", type: "flutter" },
+  { path: "/old", type: "tauri" }
+])) throw new Error("project merge contract failed");
+store.save(storage, "projects", merged);
+if (JSON.stringify(store.load(storage, "projects")) !== JSON.stringify(merged)) throw new Error("project load contract failed");
+store.saveSelectedPath(storage, "selected", "/new");
+if (store.selectedPath(storage, "selected") !== "/new") throw new Error("selection restore contract failed");
+values.set("projects", "{");
+if (store.load(storage, "projects").length !== 0) throw new Error("corrupt storage contract failed");
 NODE
 
 python3 <<'PY'
@@ -72,6 +101,8 @@ assert html.count('name="version-bump"') == 5
 assert html.count('name="jobs"') == 5
 assert html.count('name="version-bump" value="none" checked') == 1
 assert html.count('name="jobs" value="0" checked') == 1
+for project_library_contract in ('id="saved-projects"', 'id="saved-count"', 'id="saved-empty"'):
+    assert project_library_contract in html
 
 frontend = "\n".join(path.read_text(encoding="utf-8") for path in (root / "ui").iterdir())
 assert "https://" not in frontend and "http://" not in frontend
@@ -79,5 +110,9 @@ assert "https://" not in frontend and "http://" not in frontend
 rust = (root / "src-tauri/src/main.rs").read_text(encoding="utf-8")
 for guardrail in ('"--non-interactive"', '"--no-publish"', "slot.active", "terminate_process_tree", "RunEvent::ExitRequested"):
     assert guardrail in rust
+
+app = (root / "ui/app.js").read_text(encoding="utf-8")
+for saved_project_contract in ("projectStore", "rememberProjects", "selectSavedProject", "quickBuild", "canonical_directory"):
+    assert saved_project_contract in app or saved_project_contract in rust
 print("desktop GUI contract valid")
 PY
