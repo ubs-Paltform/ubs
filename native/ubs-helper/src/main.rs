@@ -35,7 +35,7 @@ fn manifest_entries(path: &Path) -> Result<Vec<(String, String)>, String> {
         if fields.is_empty() || fields[0].starts_with('#') || fields[0] == "version" {
             continue;
         }
-        if fields.len() != 3 || fields[0] != "file" {
+        if fields.len() != 3 || !matches!(fields[0], "file" | "installer-file") {
             return Err(format!("invalid manifest line {}", index + 1));
         }
         let hash = fields[1];
@@ -46,7 +46,9 @@ fn manifest_entries(path: &Path) -> Result<Vec<(String, String)>, String> {
         if !safe_relative(Path::new(relative)) {
             return Err(format!("unsafe path on manifest line {}", index + 1));
         }
-        entries.push((relative.to_owned(), hash.to_ascii_lowercase()));
+        if fields[0] == "file" {
+            entries.push((relative.to_owned(), hash.to_ascii_lowercase()));
+        }
     }
     Ok(entries)
 }

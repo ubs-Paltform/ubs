@@ -46,6 +46,15 @@ esac
 
 VERSION_CHANGED=false
 BUILD_COMPLETED=false
+VERSION_FILE_WAS_DIRTY=false
+
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1 && {
+  ! git ls-files --error-unmatch -- "$PUBSPEC" >/dev/null 2>&1 ||
+  ! git diff --quiet -- "$PUBSPEC" ||
+  ! git diff --cached --quiet -- "$PUBSPEC"
+}; then
+  VERSION_FILE_WAS_DIRTY=true
+fi
 
 set_pubspec_version() {
   local version="$1"
@@ -401,7 +410,9 @@ BUILD_COMPLETED=true
 # ==========================================
 
 if [ "$VERSION_CHANGED" = true ]; then
-  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  if [ "$VERSION_FILE_WAS_DIRTY" = true ]; then
+    echo -e "${YELLOW}⚠️  $(ubs_msg VERSION_COMMIT_SKIPPED_DIRTY "$PUBSPEC")${NC}" >&2
+  elif git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     git add -- "$PUBSPEC" 2>/dev/null
     if git commit -m "chore: 버전 ${NEW_VERSION}" -- "$PUBSPEC" >/dev/null 2>&1; then
       echo -e "${GREEN}✅ $(ubs_msg VERSION_COMMIT_SUCCESS "$NEW_VERSION")${NC}"

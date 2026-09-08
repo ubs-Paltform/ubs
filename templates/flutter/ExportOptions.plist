@@ -4,7 +4,7 @@
 <dict>
     <!-- Generic App Store Connect export template. Copy into a Flutter app's ios/. -->
     <key>method</key>
-    <string>app-store</string>
+    <string>app-store-connect</string>
     <key>uploadSymbols</key>
     <true/>
     <key>compileBitcode</key>

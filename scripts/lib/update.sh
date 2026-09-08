@@ -65,6 +65,13 @@ ubs_update_allowed_path() {
   esac
 }
 
+ubs_update_allowed_installer_path() {
+  case "$1" in
+    .env.example|.env.macos.example) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 ubs_update_required_paths() {
   cat <<'EOF'
 VERSION
@@ -97,6 +104,13 @@ skills/universal-build/agents/openai.yaml
 skills/universal-build/references/optimization.md
 templates/flutter/ExportOptions.plist
 templates/flutter/ExportOptions-macos.plist
+EOF
+}
+
+ubs_update_installer_paths() {
+  cat <<'EOF'
+.env.example
+.env.macos.example
 EOF
 }
 
@@ -277,6 +291,23 @@ ubs_run_update() {
         seen="$seen $relative"
         paths+=("$relative")
         hashes+=("$value")
+        ;;
+      installer-file)
+        if ! printf '%s' "$value" | grep -Eqs '^[0-9a-f]{64}$' || \
+           [ -z "$relative" ] || [ -n "$extra" ] || \
+           ! ubs_update_allowed_installer_path "$relative"; then
+          echo "$(ubs_msg UPDATE_MANIFEST_ENTRY_INVALID "$relative")" >&2
+          rm -rf "$temp_dir"
+          return 1
+        fi
+        case " $seen " in
+          *" $relative "*)
+            echo "$(ubs_msg UPDATE_MANIFEST_PATH_DUPLICATE "$relative")" >&2
+            rm -rf "$temp_dir"
+            return 1
+            ;;
+        esac
+        seen="$seen $relative"
         ;;
       *)
         echo "$(ubs_msg UPDATE_MANIFEST_ENTRY_UNKNOWN "$kind")" >&2

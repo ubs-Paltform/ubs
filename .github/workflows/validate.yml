@@ -61,6 +61,7 @@ jobs:
           bash tests/test-detection.sh
           bash tests/test-install.sh
           bash tests/test-python-adapters.sh
+          bash tests/test-version-commits.sh
           bash tests/test-update.sh
           bash tests/test-i18n.sh
           bash tests/test-i18n-placeholders.sh
@@ -96,8 +97,21 @@ jobs:
           openssl dgst -sha256 -verify /tmp/manifest-pubkey.pem \
             -signature scripts/update-manifest.txt.sig scripts/update-manifest.txt
 
-      - name: Validate Flutter export template
-        run: python -c 'import plistlib; plistlib.load(open("templates/flutter/ExportOptions.plist", "rb"))'
+      - name: Validate Flutter export templates
+        run: |
+          python - <<'PY'
+          import plistlib
+          from pathlib import Path
+
+          for path in (
+              Path("templates/flutter/ExportOptions.plist"),
+              Path("templates/flutter/ExportOptions-macos.plist"),
+          ):
+              with path.open("rb") as stream:
+                  options = plistlib.load(stream)
+              assert options.get("method") == "app-store-connect", path
+              assert options.get("uploadSymbols") is True, path
+          PY
 
       - name: Validate privacy ignores
         run: |
@@ -124,9 +138,13 @@ jobs:
               "UBS_JOBS", "UBS_INSTALL_MODE", "UBS_MANAGE_GITIGNORE",
               "UBS_GRADLE_FLAGS", "UBS_LANG", "graph --json",
               "ubs.dependencies.json", "ios-xcode", "scripts/ubs_mcp.py",
-              "UBS_MCP_ROOT",
+              "UBS_MCP_ROOT", "--repo Claude-Personal/ubs",
+              "--signer-workflow Claude-Personal/ubs/.github/workflows/attest-release.yml",
+              "raw.githubusercontent.com/Claude-Personal/ubs/$UBS_INSTALL_REF/install.sh",
           ):
               assert required in text, f"README.md is missing current feature reference {required}"
+          workflow = Path(".github/workflows/attest-release.yml").read_text(encoding="utf-8")
+          assert "github.ref_protected" in workflow
           assert "Copyright (c) 2026 kimdzhekhon" in Path("LICENSE").read_text(encoding="utf-8")
           print("README and Mermaid diagrams are valid")
           PY

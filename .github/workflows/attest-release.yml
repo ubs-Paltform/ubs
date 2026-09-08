@@ -26,6 +26,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: Require a protected release tag
+        if: ${{ !github.ref_protected }}
+        run: |
+          echo "Release attestations require a protected v* tag." >&2
+          exit 1
+
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 

@@ -55,6 +55,7 @@ run_case "UBS_LANG이 LANG보다 우선"         en    UNSET       UNSET       k
 run_case "LC_ALL이 LANG보다 우선"           UNSET zh_CN.UTF-8 UNSET       ko_KR.UTF-8 NONE   zh
 run_case "LC_MESSAGES가 LANG보다 우선"      UNSET UNSET       ja_JP.UTF-8 ko_KR.UTF-8 NONE   ja
 run_case "LC_ALL이 LC_MESSAGES보다 우선"    UNSET zh_TW.UTF-8 ja_JP.UTF-8 ko_KR.UTF-8 NONE   zh
+run_case "미지원 LC_ALL → LC_MESSAGES"       UNSET fr_FR.UTF-8 ja_JP.UTF-8 ko_KR.UTF-8 NONE   ja
 run_case "LANG=zh_CN.UTF-8"                 UNSET UNSET       UNSET       zh_CN.UTF-8 NONE   zh
 run_case "LANG=en_US.UTF-8"                 UNSET UNSET       UNSET       en_US.UTF-8 NONE   en
 run_case "UBS_LANG 빈 문자열은 미설정 취급" ""    UNSET       UNSET       ja_JP.UTF-8 NONE   ja

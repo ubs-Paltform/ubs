@@ -496,4 +496,20 @@ grep -Fq -- '--target universal-apple-darwin' "$FIXTURE/tauri-universal.log" || 
   exit 1
 }
 
+# legacy shell 감사도 블록 주석 안의 Gradle 설정을 활성 설정으로 오인하지 않는다.
+mkdir -p "$FIXTURE/apps/commented-gradle"
+printf '%s\n' '/*' 'minifyEnabled = true' 'proguardFiles("rules.pro")' '*/' \
+  > "$FIXTURE/apps/commented-gradle/build.gradle"
+# shellcheck source=../scripts/lib/audit.sh
+source "$REPO_DIR/scripts/lib/audit.sh"
+COMMENTED_AUDIT="$(audit_android android "$FIXTURE/apps/commented-gradle")"
+printf '%s\n' "$COMMENTED_AUDIT" | grep -Fq $'android-minify\tnot-configured' || {
+  echo "legacy Gradle 감사가 블록 주석을 활성 설정으로 오인했습니다." >&2
+  exit 1
+}
+printf '%s\n' "$COMMENTED_AUDIT" | grep -Fq $'r8-rules\tnot-configured' || {
+  echo "legacy Gradle 감사가 주석의 ProGuard 설정을 활성화로 오인했습니다." >&2
+  exit 1
+}
+
 echo "감지 테스트 통과 (6 projects)"

@@ -15,3 +15,8 @@ while IFS= read -r relative; do
   [ -f "$ROOT/$relative" ] || { echo "필수 파일 누락: $relative" >&2; exit 1; }
   printf 'file %s %s\n' "$(ubs_update_sha256 "$ROOT/$relative")" "$relative"
 done < <(ubs_update_required_paths)
+
+while IFS= read -r relative; do
+  [ -f "$ROOT/$relative" ] || { echo "필수 installer 파일 누락: $relative" >&2; exit 1; }
+  printf 'installer-file %s %s\n' "$(ubs_update_sha256 "$ROOT/$relative")" "$relative"
+done < <(ubs_update_installer_paths)

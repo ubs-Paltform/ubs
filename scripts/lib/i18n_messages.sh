@@ -968,6 +968,11 @@ UBS_MSG_en_VERSION_COMMIT_NOT_GIT_REPO="Not a git repository, so the version cha
 UBS_MSG_ja_VERSION_COMMIT_NOT_GIT_REPO="git リポジトリではないため、バージョン変更(%s)はコミットされないまま残ります。"
 UBS_MSG_zh_VERSION_COMMIT_NOT_GIT_REPO="不是 git 仓库，版本变更(%s)将保持未提交状态。"
 
+UBS_MSG_ko_VERSION_COMMIT_SKIPPED_DIRTY="기존 변경을 보호하기 위해 버전 커밋을 건너뜁니다: %s"
+UBS_MSG_en_VERSION_COMMIT_SKIPPED_DIRTY="Skipped the version commit to preserve pre-existing changes: %s"
+UBS_MSG_ja_VERSION_COMMIT_SKIPPED_DIRTY="既存の変更を保護するためバージョンコミットをスキップしました: %s"
+UBS_MSG_zh_VERSION_COMMIT_SKIPPED_DIRTY="为保留现有更改，已跳过版本提交: %s"
+
 # --- shared: build-finished OS notification (build-flutter.sh, build-tauri-macos.sh) ---
 
 UBS_MSG_ko_NOTIFY_TTS_BUILD_COMPLETE="빌드가 성공적으로 완료되었습니다"

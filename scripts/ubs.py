@@ -127,6 +127,7 @@ class Options:
     obfuscate_js_explicit: bool = "TAURI_OBFUSCATE_JS" in os.environ
     publish: Optional[bool] = None
     track: Optional[str] = None
+    artifact: Optional[Path] = None
     type_filter: str = ""
     project_path: Optional[Path] = None
     report_json: Optional[Path] = None
@@ -210,8 +211,54 @@ def uses_catalog_plugin(gradle_text: str, accessors: Iterable[str]) -> bool:
 
 
 @lru_cache(maxsize=256)
+def strip_gradle_comments(text: str) -> str:
+    """Remove // and /* */ comments without treating comment markers in strings as syntax."""
+    output: List[str] = []
+    index = 0
+    quote = ""
+    while index < len(text):
+        if quote:
+            if text.startswith(quote, index):
+                output.append(quote)
+                index += len(quote)
+                quote = ""
+            elif len(quote) == 1 and text[index] == "\\" and index + 1 < len(text):
+                output.append(text[index:index + 2])
+                index += 2
+            else:
+                output.append(text[index])
+                index += 1
+            continue
+        if text.startswith("//", index):
+            newline = text.find("\n", index + 2)
+            if newline < 0:
+                break
+            output.append("\n")
+            index = newline + 1
+            continue
+        if text.startswith("/*", index):
+            end = text.find("*/", index + 2)
+            comment = text[index + 2:] if end < 0 else text[index + 2:end]
+            output.append("\n" * comment.count("\n"))
+            index = len(text) if end < 0 else end + 2
+            continue
+        triple = next((value for value in ('"""', "'''") if text.startswith(value, index)), "")
+        if triple:
+            quote = triple
+            output.append(triple)
+            index += 3
+            continue
+        if text[index] in {'"', "'"}:
+            quote = text[index]
+        output.append(text[index])
+        index += 1
+    return "".join(output)
+
+
 def gradle_evidence(directory: Path, max_depth: int = 3) -> tuple[str, Dict[str, Set[str]]]:
-    combined = "\n".join(read_text(path) for path in gradle_files(directory, max_depth))
+    combined = "\n".join(
+        strip_gradle_comments(read_text(path)) for path in gradle_files(directory, max_depth)
+    )
     return combined, catalog_plugin_accessors(directory)
 
 
@@ -226,14 +273,14 @@ def detect_gradle_type(directory: Path) -> Optional[str]:
     combined, catalog = gradle_evidence(directory)
     if not combined:
         return None
+    if re.search(r"multiplatform|org\.jetbrains\.kotlin\.multiplatform", combined) or \
+            uses_catalog_plugin(combined, catalog.get("org.jetbrains.kotlin.multiplatform", set())):
+        return "kotlin-multiplatform"
     if re.search(r"com\.android\.(application|library)", combined) or any(
         uses_catalog_plugin(combined, catalog.get(plugin_id, set()))
         for plugin_id in ("com.android.application", "com.android.library")
     ):
         return "android"
-    if re.search(r"multiplatform|org\.jetbrains\.kotlin\.multiplatform", combined) or \
-            uses_catalog_plugin(combined, catalog.get("org.jetbrains.kotlin.multiplatform", set())):
-        return "kotlin-multiplatform"
     if re.search(r"org\.jetbrains\.kotlin|kotlin.*(jvm|android)", combined) or any(
         uses_catalog_plugin(combined, accessors)
         for plugin_id, accessors in catalog.items()
@@ -629,12 +676,14 @@ def godot_selected_presets(directory: Path, environment: Dict[str, str]) -> List
             raise ValueError(t("GODOT_PRESET_NOT_FOUND", name=explicit))
         return matches
     platform_filter = environment.get("UBS_GODOT_PLATFORM", "auto")
-    if platform_filter == "ios":
+    if platform_filter == "auto":
+        selected = list(presets)
+    elif platform_filter == "ios":
         selected = [preset for preset in presets if preset["platform"] == "iOS"]
     elif platform_filter == "android":
         selected = [preset for preset in presets if preset["platform"] == "Android"]
     else:
-        selected = list(presets)
+        raise ValueError(t("GODOT_PLATFORM_INVALID", platform=platform_filter))
     if not selected:
         raise ValueError(t("GODOT_NO_MATCHING_PRESET", platform=platform_filter))
     return selected
@@ -1338,8 +1387,25 @@ def publish_project(
 ) -> int:
     artifacts = [Path(value) for value in discover_artifacts(project, since)]
     publishable = [path for path in artifacts if path.suffix.lower() in {".ipa", ".pkg", ".aab"}]
+    if options.artifact is not None:
+        candidate = options.artifact.expanduser()
+        candidate = candidate if candidate.is_absolute() else project.path / candidate
+        try:
+            candidate = candidate.resolve(strict=True)
+            candidate.relative_to(project.path.resolve())
+        except (OSError, ValueError):
+            eprint(f"{RED}{t('PUBLISH_ARTIFACT_INVALID', artifact=options.artifact, path=project.path)}{NC}")
+            return 1
+        if candidate not in publishable:
+            eprint(f"{RED}{t('PUBLISH_ARTIFACT_INVALID', artifact=candidate, path=project.path)}{NC}")
+            return 1
+        publishable = [candidate]
     if not publishable:
         eprint(f"{YELLOW}{t('PUBLISH_NO_ARTIFACTS', path=project.path)}{NC}")
+        return 1
+    if len(publishable) != 1:
+        choices = ", ".join(str(path) for path in publishable)
+        eprint(f"{RED}{t('PUBLISH_MULTIPLE_ARTIFACTS', artifacts=choices)}{NC}")
         return 1
     publish_environment = environment.copy()
     if options.track is not None:
@@ -1600,7 +1666,7 @@ def parse_options(argv: Sequence[str]) -> Options:
         elif value == "--publish": options.publish = True
         elif value == "--no-publish": options.publish = False
         elif value == "--fail-fast": options.fail_fast = True
-        elif value in {"--version-bump", "--flutter-platform", "--flutter-outputs", "--type", "--project", "--report-json", "--jobs", "--track"}:
+        elif value in {"--version-bump", "--flutter-platform", "--flutter-outputs", "--type", "--project", "--report-json", "--jobs", "--track", "--artifact"}:
             index += 1
             if index >= len(args): raise ValueError(t("OPTION_VALUE_REQUIRED", option=value))
             argument = args[index]
@@ -1611,6 +1677,7 @@ def parse_options(argv: Sequence[str]) -> Options:
             elif value == "--project": options.project_path = Path(argument)
             elif value == "--report-json": options.report_json = Path(argument).expanduser().absolute()
             elif value == "--track": options.track = argument
+            elif value == "--artifact": options.artifact = Path(argument)
             else:
                 try: options.jobs = int(argument)
                 except ValueError as error: raise ValueError(t("JOBS_INVALID")) from error
@@ -1634,6 +1701,8 @@ def validate_options(options: Options) -> None:
         raise ValueError(t("JOBS_INVALID"))
     if options.track is not None and options.track not in {"internal", "alpha", "beta", "production"}:
         raise ValueError(t("PLAY_TRACK_INVALID_VALUE", value=options.track))
+    if options.artifact is not None and options.command != "publish":
+        raise ValueError(t("PUBLISH_ARTIFACT_PUBLISH_ONLY"))
 
 
 def selected_projects(options: Options, root: Path) -> List[Project]:
@@ -1978,7 +2047,16 @@ def execute_projects(
         )
 
         def run_group(group: Sequence[Project]) -> List[tuple[Project, int]]:
-            return [(project, run_project(project, options, report, build_started_at)) for project in group]
+            results = []
+            for project in group:
+                try:
+                    status = run_project(project, options, report, build_started_at)
+                except Exception as error:
+                    eprint(f"{RED}✗ {t('BUILD_GROUP_ERROR', error=error)}{NC}")
+                    report.append(project, 1, False)
+                    status = 1
+                results.append((project, status))
+            return results
 
         for level, original_groups in enumerate(all_groups):
             layer = [project for group in original_groups for project in group]

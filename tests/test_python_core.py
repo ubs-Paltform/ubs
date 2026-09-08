@@ -306,6 +306,42 @@ class PythonCoreTests(unittest.TestCase):
             self.assertEqual(status, 1)
             process.assert_not_called()
 
+    def test_publish_requires_one_artifact_or_explicit_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            output = root / "app/build/outputs/bundle/release"
+            output.mkdir(parents=True)
+            first = output / "first.aab"
+            second = output / "second.aab"
+            first.write_bytes(b"first")
+            second.write_bytes(b"second")
+            project = ubs.Project("android", root)
+            ubs.discover_artifacts.cache_clear()
+            with mock.patch.object(ubs, "publish_google_play", return_value=0) as publish:
+                self.assertEqual(ubs.publish_project(project, ubs.Options(root=root), {}), 1)
+                publish.assert_not_called()
+                options = ubs.Options(
+                    root=root,
+                    artifact=Path("app/build/outputs/bundle/release/second.aab"),
+                )
+                self.assertEqual(ubs.publish_project(project, options, {}), 0)
+                publish.assert_called_once_with(second, project, {})
+
+    def test_publish_rejects_artifact_outside_project(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            outside = root.parent / "outside.aab"
+            outside.write_bytes(b"outside")
+            try:
+                options = ubs.Options(root=root, artifact=outside)
+                with mock.patch.object(ubs, "publish_google_play") as publish:
+                    self.assertEqual(
+                        ubs.publish_project(ubs.Project("android", root), options, {}), 1,
+                    )
+                    publish.assert_not_called()
+            finally:
+                outside.unlink(missing_ok=True)
+
     def test_google_play_track_publish_replaces_completed_release_not_stacks(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
@@ -463,6 +499,41 @@ class PythonCoreTests(unittest.TestCase):
             (root / ".npmrc").write_text("legacy-peer-deps=true\n", encoding="utf-8")
             after = ubs.dependency_digest(root, "npm", environment)
             self.assertNotEqual(before, after)
+
+    def test_kotlin_multiplatform_wins_over_android_plugin(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            (root / "settings.gradle.kts").write_text(
+                'rootProject.name = "demo"\n', encoding="utf-8",
+            )
+            (root / "build.gradle.kts").write_text(
+                'plugins {\n  id("org.jetbrains.kotlin.multiplatform")\n'
+                '  id("com.android.library")\n}\n', encoding="utf-8",
+            )
+            ubs.detect_project_type.cache_clear()
+            self.assertEqual(ubs.detect_project_type(root), "kotlin-multiplatform")
+
+    def test_gradle_audit_ignores_block_comments(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            (root / "build.gradle.kts").write_text(
+                "/*\nminifyEnabled = true\nproguardFiles(\"rules.pro\")\n*/\n",
+                encoding="utf-8",
+            )
+            items = ubs.audit_project(ubs.Project("android", root))
+            statuses = {item["check"]: item["status"] for item in items}
+            self.assertEqual(statuses["android-minify"], "not-configured")
+            self.assertEqual(statuses["r8-rules"], "not-configured")
+
+    def test_godot_rejects_unknown_platform(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            (root / "export_presets.cfg").write_text(
+                '[preset.0]\nname="Android"\nplatform="Android"\n'
+                'export_path="build/android/app.aab"\n', encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "windows"):
+                ubs.godot_selected_presets(root, {"UBS_GODOT_PLATFORM": "windows"})
 
     def test_parallel_report_writes_valid_json(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -636,6 +707,39 @@ class PythonCoreTests(unittest.TestCase):
             self.assertEqual(status, 1)
             self.assertIn("good-app", observed)
             self.assertNotIn("blocked-app", observed)
+
+    def test_serialized_group_preserves_results_after_exception(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            paths = [root / "apps" / name for name in ("a", "b", "c")]
+            for path in paths:
+                path.mkdir(parents=True)
+                (path / "package.json").write_text(
+                    '{"scripts":{"build":"true"}}', encoding="utf-8",
+                )
+            (root / "package.json").write_text(
+                '{"workspaces":["apps/*"],"scripts":{"build":"true"}}',
+                encoding="utf-8",
+            )
+            projects = [ubs.Project("node", path) for path in paths]
+            observed = []
+
+            def run(project, _options, _report, _started=None):
+                observed.append(project)
+                if project.path.name == "b":
+                    raise RuntimeError("fixture failure")
+                return 0
+
+            with mock.patch.object(ubs, "run_project", side_effect=run), \
+                    mock.patch.object(ubs, "open_artifact_directories") as opener:
+                status = ubs.execute_projects(
+                    projects, ubs.Options(root=root, jobs=2), ubs.BuildReport(None), root,
+                )
+            self.assertEqual(status, 1)
+            self.assertEqual(observed, projects)
+            opener.assert_called_once_with(
+                [projects[0], projects[2]], build_started_at=mock.ANY,
+            )
 
 
 if __name__ == "__main__":
