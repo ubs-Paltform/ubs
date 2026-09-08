@@ -246,7 +246,7 @@ CDpp7AANizXjfMqv3cvuAoiI7CSH02h0TNH4aL9+xyqsdb9P6rN1XYp5Tw==
 -----END PUBLIC KEY-----
 """
 
-VERSION = "3.11.0"
+VERSION = "3.11.1"
 REPOSITORY = "https://raw.githubusercontent.com/Claude-Personal/ubs"
 RELEASE_REF = os.environ.get("UBS_INSTALL_REF", f"v{VERSION}")
 BASE_URL = os.environ.get("UBS_INSTALL_BASE_URL", f"{REPOSITORY}/{RELEASE_REF}").rstrip("/") + "/"
@@ -272,6 +272,10 @@ MANAGED = (
     "templates/flutter/ExportOptions.plist",
     "templates/flutter/ExportOptions-macos.plist",
 )
+
+# Signed by the release manifest and consumed only during first install. The
+# runtime updater must not overwrite an application's existing env templates.
+INSTALLER_FILES = (".env.example", ".env.macos.example")
 
 IGNORE_BLOCK = """# BEGIN Universal Build Script
 .ubs/
@@ -352,7 +356,7 @@ def parse_manifest(data: bytes) -> Dict[str, str]:
         if fields[0] == "version" and len(fields) == 2:
             version = fields[1]
             continue
-        if len(fields) != 3 or fields[0] != "file":
+        if len(fields) != 3 or fields[0] not in {"file", "installer-file"}:
             raise RuntimeError(t("MANIFEST_LINE_INVALID", number=number))
         digest, relative = fields[1:]
         if not re.fullmatch(r"[0-9a-f]{64}", digest):
@@ -362,9 +366,10 @@ def parse_manifest(data: bytes) -> Dict[str, str]:
         entries[relative] = digest
     if version != VERSION:
         raise RuntimeError(t("VERSION_MISMATCH", installer=VERSION, manifest=version))
-    if set(entries) != set(MANAGED):
-        missing = sorted(set(MANAGED) - set(entries))
-        extra = sorted(set(entries) - set(MANAGED))
+    expected = set(MANAGED) | set(INSTALLER_FILES)
+    if set(entries) != expected:
+        missing = sorted(expected - set(entries))
+        extra = sorted(set(entries) - expected)
         raise RuntimeError(t("MANIFEST_SET_MISMATCH", missing=missing, extra=extra))
     return entries
 
@@ -504,6 +509,12 @@ def apply_transaction(changes: Dict[str, Tuple[bytes, int]]) -> None:
 def main() -> None:
     kinds = detect_kinds()
     selected = managed_selection(kinds)
+    installer_selection = tuple(
+        relative for relative, kind in (
+            (".env.example", "flutter"), (".env.macos.example", "tauri"),
+        )
+        if kind in kinds
+    )
     kind_label = "+".join(sorted(kinds)) if kinds else "workspace"
     print(t("INSTALLER_HEADER", version=VERSION, kind=kind_label))
     print(t("SOURCE_LABEL", url=BASE_URL))
@@ -524,8 +535,9 @@ def main() -> None:
         return relative, data
 
     staged: Dict[str, bytes] = {}
-    with ThreadPoolExecutor(max_workers=min(8, len(selected))) as executor:
-        futures = [executor.submit(fetch_verified, relative) for relative in selected]
+    payloads = (*selected, *installer_selection)
+    with ThreadPoolExecutor(max_workers=min(8, len(payloads))) as executor:
+        futures = [executor.submit(fetch_verified, relative) for relative in payloads]
         for future in as_completed(futures):
             relative, data = future.result()
             staged[relative] = data
@@ -555,7 +567,7 @@ def main() -> None:
             add_change(changes, ".gitignore", updated.encode(), 0o644)
 
     if "flutter" in kinds:
-        env_example = fetch(".env.example")
+        env_example = staged[".env.example"]
         add_change(changes, ".env.example", env_example, preserve=True)
         if not (ROOT / ".env").exists() and not (ROOT / ".env.prod").exists():
             add_change(changes, ".env", env_example, 0o600)
@@ -570,7 +582,7 @@ def main() -> None:
                 staged["templates/flutter/ExportOptions-macos.plist"], preserve=True,
             )
     if "tauri" in kinds:
-        env_example = fetch(".env.macos.example")
+        env_example = staged[".env.macos.example"]
         add_change(changes, ".env.macos.example", env_example, preserve=True)
         if not (ROOT / ".env.macos").exists():
             add_change(changes, ".env.macos", env_example, 0o600)

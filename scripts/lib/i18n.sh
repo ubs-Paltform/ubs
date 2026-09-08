@@ -33,12 +33,13 @@ ubs_system_lang() {
 }
 
 ubs_detect_lang() {
-  local raw="${UBS_LANG:-${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}}"
-  local code
-  code="$(ubs_normalize_lang "$raw")"
-  case "$code" in
-    ko|en|ja|zh) echo "$code"; return ;;
-  esac
+  local raw code
+  for raw in "${UBS_LANG:-}" "${LC_ALL:-}" "${LC_MESSAGES:-}" "${LANG:-}"; do
+    code="$(ubs_normalize_lang "$raw")"
+    case "$code" in
+      ko|en|ja|zh) echo "$code"; return ;;
+    esac
+  done
   local system
   system="$(ubs_system_lang)"
   echo "${system:-en}"

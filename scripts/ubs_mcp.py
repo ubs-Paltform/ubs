@@ -11,9 +11,12 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import signal
 import subprocess
 import sys
-from typing import Dict, List, Optional
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from typing import Dict, IO, List, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from i18n import t
@@ -25,6 +28,15 @@ PROTOCOL_VERSION = "2025-11-25"
 SERVER_VERSION = (RUNTIME_ROOT / "VERSION").read_text(encoding="utf-8").strip()
 SERVER_ROOT = Path(os.environ.get("UBS_MCP_ROOT", Path.cwd())).expanduser().resolve()
 ALLOW_BUILD = os.environ.get("UBS_MCP_ALLOW_BUILD", "false") == "true"
+READ_ONLY_TIMEOUT_SECONDS = 120
+BUILD_TIMEOUT_SECONDS = 3600
+MAX_OUTPUT_BYTES = 1024 * 1024
+TERMINATION_GRACE_SECONDS = 2
+_REQUEST_LOCK = threading.Lock()
+_OUTPUT_LOCK = threading.Lock()
+_ACTIVE_REQUESTS: set[str] = set()
+_ACTIVE_PROCESSES: Dict[str, subprocess.Popen[bytes]] = {}
+_CANCELLED_REQUESTS: set[str] = set()
 
 
 def tool_schema(
@@ -108,12 +120,120 @@ def common_arguments(arguments: dict) -> tuple[Path, List[str]]:
     return path, command
 
 
-def run_ubs(arguments: List[str]) -> tuple[int, str, str]:
-    result = subprocess.run(
+def request_key(identifier: object) -> str:
+    return json.dumps(identifier, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def register_request(identifier: object) -> None:
+    with _REQUEST_LOCK:
+        _ACTIVE_REQUESTS.add(request_key(identifier))
+
+
+def finish_request(identifier: object) -> None:
+    key = request_key(identifier)
+    with _REQUEST_LOCK:
+        _ACTIVE_REQUESTS.discard(key)
+        _ACTIVE_PROCESSES.pop(key, None)
+        _CANCELLED_REQUESTS.discard(key)
+
+
+def terminate_process(process: subprocess.Popen[bytes]) -> None:
+    if process.poll() is not None:
+        return
+    try:
+        if os.name == "posix":
+            os.killpg(process.pid, signal.SIGTERM)
+        else:
+            process.terminate()
+        process.wait(timeout=TERMINATION_GRACE_SECONDS)
+    except (OSError, subprocess.TimeoutExpired):
+        if process.poll() is None:
+            try:
+                if os.name == "posix":
+                    os.killpg(process.pid, signal.SIGKILL)
+                else:
+                    process.kill()
+            except OSError:
+                pass
+
+
+def cancel_request(identifier: object) -> bool:
+    key = request_key(identifier)
+    with _REQUEST_LOCK:
+        if key not in _ACTIVE_REQUESTS:
+            return False
+        _CANCELLED_REQUESTS.add(key)
+        process = _ACTIVE_PROCESSES.get(key)
+    if process is not None:
+        terminate_process(process)
+    return True
+
+
+def read_bounded(stream: IO[bytes]) -> tuple[str, bool]:
+    chunks: List[bytes] = []
+    retained = 0
+    truncated = False
+    while True:
+        chunk = stream.read(65536)
+        if not chunk:
+            break
+        remaining = MAX_OUTPUT_BYTES - retained
+        if remaining > 0:
+            kept = chunk[:remaining]
+            chunks.append(kept)
+            retained += len(kept)
+        if len(chunk) > remaining:
+            truncated = True
+    text = b"".join(chunks).decode("utf-8", errors="replace")
+    if truncated:
+        text += "\n[output truncated]"
+    return text, truncated
+
+
+def run_ubs(
+    arguments: List[str], identifier: object = None,
+    timeout_seconds: int = READ_ONLY_TIMEOUT_SECONDS,
+) -> tuple[int, str, str]:
+    process = subprocess.Popen(
         ["bash", str(BUILD_SCRIPT), *arguments], cwd=SERVER_ROOT,
-        text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=os.name == "posix",
     )
-    return result.returncode, result.stdout, result.stderr
+    key = request_key(identifier)
+    with _REQUEST_LOCK:
+        _ACTIVE_PROCESSES[key] = process
+        cancelled = key in _CANCELLED_REQUESTS
+    if cancelled:
+        terminate_process(process)
+
+    assert process.stdout is not None and process.stderr is not None
+    outputs: Dict[str, tuple[str, bool]] = {}
+    readers = [
+        threading.Thread(target=lambda: outputs.__setitem__("stdout", read_bounded(process.stdout))),
+        threading.Thread(target=lambda: outputs.__setitem__("stderr", read_bounded(process.stderr))),
+    ]
+    for reader in readers:
+        reader.start()
+    timed_out = False
+    try:
+        process.wait(timeout=timeout_seconds)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        terminate_process(process)
+    for reader in readers:
+        reader.join()
+    process.stdout.close()
+    process.stderr.close()
+
+    stdout = outputs.get("stdout", ("", False))[0]
+    stderr = outputs.get("stderr", ("", False))[0]
+    with _REQUEST_LOCK:
+        cancelled = key in _CANCELLED_REQUESTS
+        _ACTIVE_PROCESSES.pop(key, None)
+    if cancelled:
+        return 130, stdout, f"{stderr}\nrequest cancelled".strip()
+    if timed_out:
+        return 124, stdout, f"{stderr}\nrequest timed out after {timeout_seconds} seconds".strip()
+    return process.returncode, stdout, stderr
 
 
 def tool_result(status: int, stdout: str, stderr: str, structured: object = None) -> dict:
@@ -129,7 +249,7 @@ def tool_result(status: int, stdout: str, stderr: str, structured: object = None
     return result
 
 
-def call_tool(name: str, arguments: object) -> dict:
+def call_tool(name: str, arguments: object, identifier: object = None) -> dict:
     if not isinstance(arguments, dict):
         raise ValueError("arguments must be an object")
     if name in {"ubs_detect", "ubs_audit", "ubs_plan", "ubs_graph"}:
@@ -147,7 +267,7 @@ def call_tool(name: str, arguments: object) -> dict:
                 raise ValueError("flutter_outputs must be a string")
             command.extend(["--jobs", str(jobs), "--flutter-outputs", outputs])
         command.append(str(path))
-        status, stdout, stderr = run_ubs(command)
+        status, stdout, stderr = run_ubs(command, identifier)
         structured = None
         if status == 0:
             try:
@@ -159,7 +279,7 @@ def call_tool(name: str, arguments: object) -> dict:
     if name == "ubs_update_check":
         if arguments:
             raise ValueError("ubs_update_check does not accept arguments")
-        status, stdout, stderr = run_ubs(["update", "--check", "--json"])
+        status, stdout, stderr = run_ubs(["update", "--check", "--json"], identifier)
         structured = None
         if status == 0 and stdout.strip():
             try:
@@ -186,7 +306,7 @@ def call_tool(name: str, arguments: object) -> dict:
         if dry_run:
             command.append("--dry-run")
         command.append(str(path))
-        status, stdout, stderr = run_ubs(command)
+        status, stdout, stderr = run_ubs(command, identifier, BUILD_TIMEOUT_SECONDS)
         return tool_result(status, stdout, stderr)
     raise KeyError(name)
 
@@ -212,7 +332,12 @@ def handle_message(message: object) -> Optional[dict]:
             "serverInfo": {"name": "universal-build", "version": SERVER_VERSION},
             "instructions": "Use read-only detect, audit, plan, and graph tools before requesting builds.",
         })
-    if method in {"notifications/initialized", "notifications/cancelled"}:
+    if method == "notifications/cancelled":
+        params = message.get("params")
+        if isinstance(params, dict) and "requestId" in params:
+            cancel_request(params["requestId"])
+        return None
+    if method == "notifications/initialized":
         return None
     if method == "ping":
         return response(identifier, {})
@@ -223,7 +348,7 @@ def handle_message(message: object) -> Optional[dict]:
         if not isinstance(params, dict) or not isinstance(params.get("name"), str):
             return response(identifier, error={"code": -32602, "message": "Invalid tool parameters"})
         try:
-            result = call_tool(params["name"], params.get("arguments", {}))
+            result = call_tool(params["name"], params.get("arguments", {}), identifier)
             return response(identifier, result)
         except KeyError:
             return response(identifier, error={"code": -32601, "message": "Unknown tool"})
@@ -238,18 +363,39 @@ def handle_message(message: object) -> Optional[dict]:
 
 
 def serve() -> int:
-    for raw in sys.stdin:
-        try:
-            message = json.loads(raw)
-            result = handle_message(message)
-        except json.JSONDecodeError as error:
-            result = response(None, error={"code": -32700, "message": f"Parse error: {error.msg}"})
-        except Exception as error:  # keep the stdio session alive on unexpected tool errors
-            print(t("MCP_SERVER_ERROR", error=error), file=sys.stderr)
-            result = response(None, error={"code": -32603, "message": "Internal error"})
-        if result is not None:
+    def emit(result: dict) -> None:
+        with _OUTPUT_LOCK:
             sys.stdout.write(json.dumps(result, ensure_ascii=False, separators=(",", ":")) + "\n")
             sys.stdout.flush()
+
+    def run_tool(message: dict) -> None:
+        identifier = message.get("id")
+        try:
+            result = handle_message(message)
+        except Exception as error:  # keep the stdio session alive on unexpected tool errors
+            print(t("MCP_SERVER_ERROR", error=error), file=sys.stderr)
+            result = response(identifier, error={"code": -32603, "message": "Internal error"})
+        finally:
+            finish_request(identifier)
+        if result is not None:
+            emit(result)
+
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="ubs-mcp") as executor:
+        for raw in sys.stdin:
+            try:
+                message = json.loads(raw)
+                if isinstance(message, dict) and message.get("method") == "tools/call":
+                    register_request(message.get("id"))
+                    executor.submit(run_tool, message)
+                    continue
+                result = handle_message(message)
+            except json.JSONDecodeError as error:
+                result = response(None, error={"code": -32700, "message": f"Parse error: {error.msg}"})
+            except Exception as error:  # keep the stdio session alive on unexpected tool errors
+                print(t("MCP_SERVER_ERROR", error=error), file=sys.stderr)
+                result = response(None, error={"code": -32603, "message": "Internal error"})
+            if result is not None:
+                emit(result)
     return 0
 
 

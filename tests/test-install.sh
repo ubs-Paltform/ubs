@@ -6,7 +6,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FIXTURE="$(mktemp -d)"
 trap 'rm -rf "$FIXTURE"' EXIT
 mkdir -p "$FIXTURE/target" "$FIXTURE/symlink-target" "$FIXTURE/flutter-link" \
-  "$FIXTURE/incomplete-remote/scripts" "$FIXTURE/incomplete-target"
+  "$FIXTURE/incomplete-remote/scripts" "$FIXTURE/incomplete-target" \
+  "$FIXTURE/tampered-env-remote/scripts" "$FIXTURE/tampered-env-target"
 
 run_installer() {
   local target="$1"
@@ -107,6 +108,27 @@ if UBS_INSTALL_BASE_URL="file://$FIXTURE/incomplete-remote/" UBS_INSTALL_ALLOW_F
 fi
 [ ! -e "$FIXTURE/incomplete-target/VERSION" ] || {
   echo "다운로드 실패 후 부분 설치 파일이 남았습니다." >&2
+  exit 1
+}
+
+# 설치 전용 env 템플릿도 서명 manifest 해시와 다르면 전체 적용 전에 중단한다.
+cp "$ROOT/scripts/update-manifest.txt" "$FIXTURE/tampered-env-remote/scripts/update-manifest.txt"
+cp "$ROOT/scripts/update-manifest.txt.sig" "$FIXTURE/tampered-env-remote/scripts/update-manifest.txt.sig"
+while IFS=' ' read -r kind hash relative extra; do
+  case "$kind" in file|installer-file) ;; *) continue ;; esac
+  mkdir -p "$FIXTURE/tampered-env-remote/$(dirname "$relative")"
+  cp "$ROOT/$relative" "$FIXTURE/tampered-env-remote/$relative"
+done < "$ROOT/scripts/update-manifest.txt"
+printf '\n# tampered\n' >> "$FIXTURE/tampered-env-remote/.env.example"
+printf '%s\n' 'name: fixture' 'dependencies:' '  flutter:' '    sdk: flutter' \
+  > "$FIXTURE/tampered-env-target/pubspec.yaml"
+if UBS_INSTALL_BASE_URL="file://$FIXTURE/tampered-env-remote/" UBS_INSTALL_ALLOW_FILE=true \
+  bash -c 'cd "$1" && bash "$2"' _ "$FIXTURE/tampered-env-target" "$ROOT/install.sh" >/dev/null 2>&1; then
+  echo "위조된 Flutter env 템플릿을 허용했습니다." >&2
+  exit 1
+fi
+[ ! -e "$FIXTURE/tampered-env-target/VERSION" ] || {
+  echo "env 템플릿 해시 검증 실패 전에 부분 설치가 발생했습니다." >&2
   exit 1
 }
 

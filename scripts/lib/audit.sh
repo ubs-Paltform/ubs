@@ -12,7 +12,15 @@ gradle_contains() {
   local pattern="$2"
   local file
   while IFS= read -r -d '' file; do
-    grep -Es "$pattern" "$file" 2>/dev/null | grep -qvE '^[[:space:]]*(//|\*)' && return 0
+    python3 - "$file" "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" <<'PY' | grep -Eqs "$pattern" && return 0
+import sys
+from pathlib import Path
+
+sys.path.insert(0, sys.argv[2])
+from ubs import strip_gradle_comments
+
+print(strip_gradle_comments(Path(sys.argv[1]).read_text(encoding="utf-8")))
+PY
   done < <(find "$dir" -maxdepth 4 -type f \( -name 'build.gradle' -o -name 'build.gradle.kts' \) -print0)
   return 1
 }

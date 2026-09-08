@@ -29,6 +29,7 @@ fi
 
 printf '%s\n' 'version 3.4.0' \
   'file ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad abc.txt' \
+  'installer-file 0000000000000000000000000000000000000000000000000000000000000000 .env.example' \
   > "$FIXTURE/manifest.txt"
 [ -z "$("$HELPER" changed-manifest "$FIXTURE/manifest.txt" "$FIXTURE")" ] || {
   echo "Rust batch 비교가 동일 파일을 변경으로 판단했습니다." >&2

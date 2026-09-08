@@ -8,7 +8,7 @@
          export with "doesn't include signing certificate" even though the app itself
          is correctly signed). -->
     <key>method</key>
-    <string>app-store</string>
+    <string>app-store-connect</string>
     <key>uploadSymbols</key>
     <true/>
 </dict>

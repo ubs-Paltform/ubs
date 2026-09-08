@@ -101,7 +101,7 @@ flowchart TD
 | `build.sh` | Stable compatibility entry point; execs `scripts/ubs.py`, or delegates to `bootstrap-update.sh` when the Python core is missing |
 | `install.sh` | Standalone (`curl \| bash`) transactional installer — stages every managed file, verifies checksums against a signed manifest, then atomically replaces, with full rollback on any failure |
 | `scripts/ubs.py` | The orchestration core: argument parsing, project detection dispatch, dependency graph, topological + parallel execution, audit, publish (App Store Connect / Google Play), JSON output for `detect`/`audit`/`plan`/`graph` |
-| `scripts/lib/detect.sh` | Pure filesystem signals (`pubspec.yaml`, `src-tauri/tauri.conf.json`, `build.gradle*`, `package.json`, `*.xcodeproj`, …) that classify a directory into one of the ten supported types |
+| `scripts/lib/detect.sh` | Pure filesystem signals (`pubspec.yaml`, `src-tauri/tauri.conf.json`, `build.gradle*`, `package.json`, `*.xcodeproj`, …) that classify a directory into one of the eleven supported types |
 | `scripts/lib/audit.sh` | Optimization/obfuscation policy checks, called by `ubs.py`'s `audit_project` |
 | `scripts/lib/update.sh` | Fetches the signed update manifest, verifies its ECDSA-P256 signature, downloads and hashes each managed file, stages, backs up, and atomically replaces — with `ubs_update_allowed_path` as a second, independent allow-list beyond the manifest's own signature |
 | `scripts/bootstrap-update.sh` | Minimal recovery path used only when `scripts/ubs.py` itself is missing |
@@ -131,7 +131,7 @@ flowchart TD
 ./build.sh --interactive           Choose version and platform directly
 ./build.sh build --project <path>  Build a specific project
 ./build.sh build --all --type TYPE Build only a given type
-./build.sh publish [--project PATH] [--track TRACK]  Upload an existing store artifact
+./build.sh publish [--project PATH] [--artifact FILE] [--track TRACK]  Upload one existing store artifact
 ```
 
 | Option | Values | Purpose |
@@ -142,6 +142,7 @@ flowchart TD
 | `--clean` / `--skip-clean` | flag | Force or skip pre-build cleaning |
 | `--obfuscate-js` / `--no-obfuscate-js` | flag | Tauri frontend JS obfuscation (asked once, remembered per-repo on the first Tauri build) |
 | `--publish` / `--no-publish` | flag | Force or disable store upload after a successful build |
+| `--artifact FILE` | path | Select exactly one discovered upload candidate for `publish` |
 | `--fail-fast` | flag | Stop at the first failure instead of continuing independent projects |
 | `--jobs N` | integer | Parallel build limit across independent projects |
 | `--report-json <file>` | path | Write the actual (not planned) build result as JSON |
@@ -319,11 +320,13 @@ To close that first-install gap, verify [GitHub Artifact Attestation](https://do
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Claude-Personal/ubs/main/install.sh -o install.sh
-gh attestation verify install.sh --owner Claude-Personal   # built into gh CLI 2.49+, no cosign needed
+gh attestation verify install.sh \
+  --repo Claude-Personal/ubs \
+  --signer-workflow Claude-Personal/ubs/.github/workflows/attest-release.yml
 bash install.sh
 ```
 
-This confirms `install.sh` was built by this repository's own GitHub Actions workflow at tag-release time (`.github/workflows/attest-release.yml` creates one attestation per tag), moving the trust root from "whoever can push to this repo" to "GitHub's OIDC issuer (Fulcio)" — a repo/account compromise alone can no longer produce a passing attestation. As a lighter-weight, out-of-band fallback, the manifest signing public key's fingerprint is pinned below; `install.sh` also prints this value at run time, so compare it before trusting a fresh install:
+This confirms that `install.sh` was attested by this repository's release workflow. The workflow refuses to attest an unprotected tag, so repository administrators must configure a ruleset that protects `v*` tags before releasing. Artifact attestation verifies provenance; it does not make a compromised repository or approved release workflow trustworthy. As a lighter-weight, out-of-band fallback, the manifest signing public key's fingerprint is pinned below; `install.sh` also prints this value at run time, so compare it before trusting a fresh install:
 
 ```text
 MANIFEST_PUBLIC_KEY fingerprint (SHA-256):
@@ -366,8 +369,10 @@ curl -fsSL https://raw.githubusercontent.com/Claude-Personal/ubs/main/install.sh
 The installer defaults to the current release's immutable Git ref, stages and checksum-verifies every managed file, then applies them as one transaction — see [Self-update: signed and atomic](#self-update-signed-and-atomic) for what backs that.
 
 ```bash
-# Pin to a specific tagged release instead of the default latest one
-UBS_INSTALL_REF=v3.8.1 bash install.sh
+# Pin installer and payloads to the same existing tag
+UBS_INSTALL_REF=v3.11.0
+curl -fsSL "https://raw.githubusercontent.com/Claude-Personal/ubs/$UBS_INSTALL_REF/install.sh" -o install.sh
+UBS_INSTALL_REF="$UBS_INSTALL_REF" bash install.sh
 
 # Re-run to update an existing install, replacing local edits to managed files
 UBS_FORCE=true bash install.sh

@@ -40,6 +40,7 @@ CASES = [
     ("LC_ALL이 LANG보다 우선", UNSET, "zh_CN.UTF-8", UNSET, "ko_KR.UTF-8", None, "zh"),
     ("LC_MESSAGES가 LANG보다 우선", UNSET, UNSET, "ja_JP.UTF-8", "ko_KR.UTF-8", None, "ja"),
     ("LC_ALL이 LC_MESSAGES보다 우선", UNSET, "zh_TW.UTF-8", "ja_JP.UTF-8", "ko_KR.UTF-8", None, "zh"),
+    ("미지원 LC_ALL은 건너뛰고 LC_MESSAGES 사용", UNSET, "fr_FR.UTF-8", "ja_JP.UTF-8", "ko_KR.UTF-8", None, "ja"),
     ("LANG=zh_CN.UTF-8", UNSET, UNSET, UNSET, "zh_CN.UTF-8", None, "zh"),
     ("LANG=en_US.UTF-8", UNSET, UNSET, UNSET, "en_US.UTF-8", None, "en"),
     ("UBS_LANG 빈 문자열은 미설정 취급", "", UNSET, UNSET, "ja_JP.UTF-8", None, "ja"),

@@ -230,6 +230,36 @@ MESSAGES: dict[str, dict[str, str]] = {
         "ja": "アップロードするストア成果物がありません: {path}",
         "zh": "没有可上传的商店产物: {path}",
     },
+    "PUBLISH_MULTIPLE_ARTIFACTS": {
+        "ko": "업로드 후보가 여러 개입니다. --artifact로 하나를 지정하세요: {artifacts}",
+        "en": "Multiple upload candidates found. Select one with --artifact: {artifacts}",
+        "ja": "アップロード候補が複数あります。--artifact で1つ指定してください: {artifacts}",
+        "zh": "发现多个上传候选项。请使用 --artifact 选择一个: {artifacts}",
+    },
+    "PUBLISH_ARTIFACT_INVALID": {
+        "ko": "지정한 산출물이 프로젝트의 업로드 후보가 아닙니다: {artifact} ({path})",
+        "en": "The selected artifact is not an upload candidate for this project: {artifact} ({path})",
+        "ja": "指定した成果物はこのプロジェクトのアップロード候補ではありません: {artifact} ({path})",
+        "zh": "指定产物不是此项目的上传候选项: {artifact} ({path})",
+    },
+    "PUBLISH_ARTIFACT_PUBLISH_ONLY": {
+        "ko": "--artifact는 publish 명령에서만 사용할 수 있습니다.",
+        "en": "--artifact can only be used with the publish command.",
+        "ja": "--artifact は publish コマンドでのみ使用できます。",
+        "zh": "--artifact 只能用于 publish 命令。",
+    },
+    "VERSION_COMMIT_SKIPPED_DIRTY": {
+        "ko": "기존 변경을 보호하기 위해 버전 커밋을 건너뜁니다: {file}",
+        "en": "Skipped the version commit to preserve pre-existing changes: {file}",
+        "ja": "既存の変更を保護するためバージョンコミットをスキップしました: {file}",
+        "zh": "为保留现有更改，已跳过版本提交: {file}",
+    },
+    "GODOT_PLATFORM_INVALID": {
+        "ko": "잘못된 Godot 플랫폼입니다: {platform}",
+        "en": "Invalid Godot platform: {platform}",
+        "ja": "無効な Godot プラットフォームです: {platform}",
+        "zh": "无效的 Godot 平台: {platform}",
+    },
     "PUBLISH_PRODUCTION_TRACK_WARNING": {
         "ko": "경고: --track production 없이 환경변수로 production 트랙이 선택되었습니다.",
         "en": "Warning: the production track was selected via environment variable without --track production.",
@@ -985,7 +1015,7 @@ MESSAGES: dict[str, dict[str, str]] = {
   ./build.sh --interactive           버전과 플랫폼을 직접 선택
   ./build.sh build --project <경로>  지정 프로젝트 빌드
   ./build.sh build --all --type TYPE 특정 타입만 빌드
-  ./build.sh publish [--project PATH] [--track TRACK]  기존 스토어 산출물 업로드
+  ./build.sh publish [--project PATH] [--artifact FILE] [--track TRACK]  기존 스토어 산출물 업로드
 
 주요 옵션:
   --version-bump none|build|patch|minor|major
@@ -994,6 +1024,7 @@ MESSAGES: dict[str, dict[str, str]] = {
   --clean | --skip-clean
   --obfuscate-js | --no-obfuscate-js  Tauri 프런트엔드 JS 난독화 (첫 Tauri 빌드에서 기본값을 물어봄)
   --publish | --no-publish            빌드 성공 후 스토어 업로드 강제/비활성화
+  --artifact FILE                     publish 업로드 후보 하나를 명시적으로 선택
   --fail-fast
   --jobs N                            독립 프로젝트 제한 병렬 빌드
   --report-json <파일>               실제 빌드 결과 JSON 저장
@@ -1021,7 +1052,7 @@ Usage:
   ./build.sh --interactive           Choose version and platform directly
   ./build.sh build --project <path>  Build a specific project
   ./build.sh build --all --type TYPE Build only a given type
-  ./build.sh publish [--project PATH] [--track TRACK]  Upload an existing store artifact
+  ./build.sh publish [--project PATH] [--artifact FILE] [--track TRACK]  Upload an existing store artifact
 
 Main options:
   --version-bump none|build|patch|minor|major
@@ -1030,6 +1061,7 @@ Main options:
   --clean | --skip-clean
   --obfuscate-js | --no-obfuscate-js  Obfuscate the Tauri frontend JS (asked on the first Tauri build)
   --publish | --no-publish            Force/disable store upload after a successful build
+  --artifact FILE                     Select exactly one publish upload candidate
   --fail-fast
   --jobs N                            Limit parallel builds of independent projects
   --report-json <file>                Save the actual build result as JSON
@@ -1057,7 +1089,7 @@ Supported types:
   ./build.sh --interactive           バージョンとプラットフォームを直接選択
   ./build.sh build --project <パス>  指定プロジェクトをビルド
   ./build.sh build --all --type TYPE 指定タイプのみビルド
-  ./build.sh publish [--project PATH] [--track TRACK]  既存のストア成果物をアップロード
+  ./build.sh publish [--project PATH] [--artifact FILE] [--track TRACK]  既存のストア成果物をアップロード
 
 主なオプション:
   --version-bump none|build|patch|minor|major
@@ -1066,6 +1098,7 @@ Supported types:
   --clean | --skip-clean
   --obfuscate-js | --no-obfuscate-js  Tauri フロントエンド JS の難読化(初回 Tauri ビルドで既定値を確認)
   --publish | --no-publish            ビルド成功後のストアアップロードを強制/無効化
+  --artifact FILE                     publish アップロード候補を1つ選択
   --fail-fast
   --jobs N                            独立プロジェクトの並列ビルド数を制限
   --report-json <ファイル>            実際のビルド結果を JSON で保存
@@ -1093,7 +1126,7 @@ Supported types:
   ./build.sh --interactive           直接选择版本和平台
   ./build.sh build --project <路径>  构建指定项目
   ./build.sh build --all --type TYPE 仅构建指定类型
-  ./build.sh publish [--project PATH] [--track TRACK]  上传已有的商店产物
+  ./build.sh publish [--project PATH] [--artifact FILE] [--track TRACK]  上传已有的商店产物
 
 主要选项:
   --version-bump none|build|patch|minor|major
@@ -1102,6 +1135,7 @@ Supported types:
   --clean | --skip-clean
   --obfuscate-js | --no-obfuscate-js  混淆 Tauri 前端 JS(首次 Tauri 构建时会询问默认值)
   --publish | --no-publish            强制/禁用构建成功后的商店上传
+  --artifact FILE                     选择一个 publish 上传候选产物
   --fail-fast
   --jobs N                            限制独立项目的并行构建数
   --report-json <文件>               将实际构建结果保存为 JSON
