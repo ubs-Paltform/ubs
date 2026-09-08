@@ -1,6 +1,7 @@
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::env;
+use std::fmt::Write as _;
 use std::fs::{self, File};
 use std::io::{self, Read};
 use std::path::{Component, Path};
@@ -17,7 +18,12 @@ fn sha256(path: &Path) -> io::Result<String> {
         }
         hasher.update(&buffer[..read]);
     }
-    Ok(format!("{:x}", hasher.finalize()))
+    let digest = hasher.finalize();
+    let mut encoded = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        write!(&mut encoded, "{byte:02x}").expect("writing to a String cannot fail");
+    }
+    Ok(encoded)
 }
 
 fn safe_relative(path: &Path) -> bool {
