@@ -2,7 +2,7 @@
 
 **Universal release build orchestrator for Flutter, Tauri, Android/Kotlin, React/Node, iOS/Xcode, and Godot — one command, auto-detected, AI-agent and MCP ready.**
 
-`ubs` (entry point `./build.sh`) is a Bash + Python CLI that detects what kind of project — or monorepo of projects — you're standing in, resolves inter-project build dependencies into a topological order, and runs the right platform-specific build adapter. It ships with safe interactive defaults, a non-interactive/CI mode, parallel builds of independent projects, an optimization/obfuscation audit, App Store Connect and Google Play publishing, a signed and atomic self-update mechanism, and CLI output localized into `ko`/`en`/`ja`/`zh`. A bundled MCP server exposes the same detect/audit/plan/graph/build surface to AI agents.
+`ubs` (entry point `./build.sh`) is a Bash + Python CLI that detects what kind of project — or monorepo of projects — you're standing in, resolves inter-project build dependencies into a topological order, and runs the right platform-specific build adapter. It ships with safe interactive defaults, a non-interactive/CI mode, bounded automatic parallel builds of independent projects, concise failure-safe logs, an optimization/obfuscation audit, App Store Connect and Google Play publishing, a signed and atomic self-update mechanism, and CLI output localized into `ko`/`en`/`ja`/`zh`. A bundled MCP server exposes the same detect/audit/plan/graph/build surface to AI agents.
 
 This document is grounded entirely in the current `build.sh`, `install.sh`, `scripts/`, and `native/ubs-helper/` of this repository — no invented commands, flags, or architecture.
 
@@ -31,7 +31,7 @@ Given a project directory (or a monorepo root), `ubs`:
 1. **Detects** every buildable sub-project by inspecting the filesystem — no config file required — and classifies each into one of eleven supported types.
 2. **Resolves dependencies** between detected projects (via inferred Node workspace/package-name links, or an explicit `ubs.dependencies.json`) into topologically ordered layers.
 3. **Plans** the exact build command for each project — read-only, so it's safe to inspect before anything runs.
-4. **Builds** each project through its adapter, in parallel across independent projects when `--jobs N > 1`, with a safe interactive version-bump/platform prompt on a real terminal and deterministic non-interactive defaults everywhere else (CI, MCP, `UBS_NON_INTERACTIVE=true`).
+4. **Builds** each project through its adapter, using bounded CPU-based parallelism for independent projects by default, with conflict serialization, concise non-interactive output, full failure logs, and safe interactive version/platform prompts.
 5. **Audits** every project's optimization and obfuscation configuration against platform-specific checks, independent of running an actual build.
 6. **Publishes** finished artifacts to App Store Connect (`.ipa`/`.pkg`) or Google Play (`.aab`) on request.
 7. **Updates** its own managed files in place — signature-verified, staged, and atomically applied with automatic rollback on any failure.
@@ -144,7 +144,8 @@ flowchart TD
 | `--publish` / `--no-publish` | flag | Force or disable store upload after a successful build |
 | `--artifact FILE` | path | Select exactly one discovered upload candidate for `publish` |
 | `--fail-fast` | flag | Stop at the first failure instead of continuing independent projects |
-| `--jobs N` | integer | Parallel build limit across independent projects |
+| `--jobs N` | integer | Override the CPU-based parallel project limit (automatic default, max 4) |
+| `--verbose` | flag | Stream full adapter output instead of concise success output |
 | `--report-json <file>` | path | Write the actual (not planned) build result as JSON |
 | `--track` | Google Play track | `internal\|alpha\|beta\|production` for `publish` |
 
@@ -274,7 +275,7 @@ UBS_NODE_BUILD_SCRIPT=build:production ./build.sh --type node
 
 ## Parallel builds & dependency graph
 
-`ubs.py` infers dependencies from Node workspace membership and matching `package.json` `name`/dependency fields, then layers them with a standard topological sort. An explicit `ubs.dependencies.json` (`{"schema_version": 1, "dependencies": {"appA": ["libB"]}}`) can declare additional edges; every referenced path must resolve to a project that was actually selected, and cycles are rejected before any build starts. `./build.sh graph --json` prints the resolved layers and edges without building anything; `--jobs N` bounds how many projects in a conflict-free group run at once via a `ThreadPoolExecutor`, one layer at a time.
+`ubs.py` infers dependencies from Node workspace membership and matching `package.json` `name`/dependency fields, then layers them with a standard topological sort. An explicit `ubs.dependencies.json` (`{"schema_version": 1, "dependencies": {"appA": ["libB"]}}`) can declare additional edges; every referenced path must resolve to a project that was actually selected, and cycles are rejected before any build starts. `./build.sh graph --json` prints the resolved layers and edges without building anything. Unless `--jobs N` or `UBS_JOBS` overrides it, UBS uses half the detected logical CPUs rounded up, capped at 4. Conflicting workspace projects remain serial. Non-interactive successful builds show one localized completion line plus important notices and warnings; failures replay the last 2 MiB of adapter output. `--verbose` restores live full output.
 
 ## Audit: optimization & obfuscation checks
 
