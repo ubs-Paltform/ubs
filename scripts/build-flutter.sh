@@ -478,7 +478,7 @@ if [ "$BUILD_IOS" = true ]; then
   echo -e "📍 $(ubs_msg BUILD_SUMMARY_IOS_IPA "$IOS_OUT/Runner.ipa")"
 fi
 if [ "$BUILD_APK" = true ]; then
-  echo -e "📍 $(ubs_msg BUILD_SUMMARY_ANDROID_APK "$APK_OUT")"
+  echo -e "📍 $(ubs_msg BUILD_SUMMARY_ANDROID_APK "$APK_OUT/app-release.apk")"
 fi
 if [ "$BUILD_WEB" = true ]; then
   echo -e "📍 $(ubs_msg BUILD_SUMMARY_FLUTTER_WEB "$WEB_OUT")"
