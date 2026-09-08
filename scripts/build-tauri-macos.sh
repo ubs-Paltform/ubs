@@ -62,6 +62,8 @@ VERSION_NAME="$CURRENT_VERSION"
 VERSION_CHANGED=false
 BUILD_COMPLETED=false
 VERSION_FILE_WAS_DIRTY=false
+VERSION_BACKUP_FILE="$(mktemp "${TMPDIR:-/tmp}/ubs-tauri-version.XXXXXX")"
+cp -p "$CONF" "$VERSION_BACKUP_FILE"
 
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1 && {
   ! git ls-files --error-unmatch -- "$CONF" >/dev/null 2>&1 ||
@@ -89,7 +91,7 @@ PYEOF
 }
 
 # 빌드 번호(CFBundleVersion) — App Store Connect는 같은 빌드 번호의 재업로드를 거부한다.
-# tauri.conf.json의 bundle.macOS.bundleVersion 이 있을 때만 다룬다(없으면 Tauri가 version을 그대로 쓴다).
+# bundleVersion이 없으면 현재 앱 버전을 기준으로 다음 값을 만들고 명시적으로 추가한다.
 CURRENT_BUNDLE_VERSION="$(python3 - "$CONF" <<'PYEOF'
 import json, sys
 try:
@@ -112,13 +114,13 @@ import json, os, sys, tempfile
 path, new_version = sys.argv[1], sys.argv[2]
 with open(path, encoding="utf-8") as source:
     config = json.load(source)
-try:
-    current = config["bundle"]["macOS"]["bundleVersion"]
-except (KeyError, TypeError):
-    sys.exit(f'"bundle.macOS.bundleVersion" key not found: {path}')
-if not isinstance(current, str):
-    sys.exit(f'"bundle.macOS.bundleVersion" must be a string: {path}')
-config["bundle"]["macOS"]["bundleVersion"] = new_version
+bundle = config.setdefault("bundle", {})
+if not isinstance(bundle, dict):
+    sys.exit(f'"bundle" must be an object: {path}')
+macos = bundle.setdefault("macOS", {})
+if not isinstance(macos, dict):
+    sys.exit(f'"bundle.macOS" must be an object: {path}')
+macos["bundleVersion"] = new_version
 directory = os.path.dirname(os.path.abspath(path))
 handle, temporary = tempfile.mkstemp(prefix=".tauri-conf-", suffix=".json", dir=directory)
 try:
@@ -148,16 +150,19 @@ PYEOF
 
 restore_version_if_incomplete() {
   if [ "$BUILD_COMPLETED" = true ]; then
+    rm -f "$VERSION_BACKUP_FILE"
     return 0
   fi
+  if [ "$VERSION_CHANGED" = true ] || [ "$BUNDLE_VERSION_CHANGED" = true ]; then
+    cp -p "$VERSION_BACKUP_FILE" "$CONF"
+  fi
   if [ "$VERSION_CHANGED" = true ]; then
-    set_tauri_version "$CURRENT_VERSION"
     echo -e "${YELLOW}↩️  $(ubs_msg VERSION_RESTORED_INCOMPLETE "$CURRENT_VERSION")${NC}" >&2
   fi
   if [ "$BUNDLE_VERSION_CHANGED" = true ]; then
-    set_tauri_bundle_version "$CURRENT_BUNDLE_VERSION"
-    echo -e "${YELLOW}↩️  $(ubs_msg TAURI_BUNDLE_VERSION_RESTORED "$CURRENT_BUNDLE_VERSION")${NC}" >&2
+    echo -e "${YELLOW}↩️  $(ubs_msg TAURI_BUNDLE_VERSION_RESTORED "${CURRENT_BUNDLE_VERSION:-$CURRENT_VERSION}")${NC}" >&2
   fi
+  rm -f "$VERSION_BACKUP_FILE"
 }
 trap restore_version_if_incomplete EXIT
 
@@ -185,10 +190,11 @@ else
   echo -e "  ${YELLOW}$(ubs_msg TAURI_MENU_OPT_MAJOR_BUMP)${NC}  → ${NEXT_MAJOR}"
   echo -e "  ${YELLOW}$(ubs_msg MENU_OPT_KEEP_VERSION)${NC}"
   echo -e "  ${YELLOW}$(ubs_msg MENU_OPT_CANCEL)${NC}"
-  if [ "$BUNDLE_VERSION_POLICY" = "auto" ] && [ -n "$CURRENT_BUNDLE_VERSION" ]; then
-    PLANNED_BUNDLE_VERSION="$(next_bundle_version "$CURRENT_BUNDLE_VERSION")"
+  if [ "$BUNDLE_VERSION_POLICY" = "auto" ]; then
+    EFFECTIVE_BUNDLE_VERSION="${CURRENT_BUNDLE_VERSION:-$CURRENT_VERSION}"
+    PLANNED_BUNDLE_VERSION="$(next_bundle_version "$EFFECTIVE_BUNDLE_VERSION")"
     if [ -n "$PLANNED_BUNDLE_VERSION" ]; then
-      echo -e "${CYAN}$(ubs_msg TAURI_BUNDLE_VERSION_PLAN "$CURRENT_BUNDLE_VERSION" "$PLANNED_BUNDLE_VERSION")${NC}"
+      echo -e "${CYAN}$(ubs_msg TAURI_BUNDLE_VERSION_PLAN "$EFFECTIVE_BUNDLE_VERSION" "$PLANNED_BUNDLE_VERSION")${NC}"
     fi
   fi
   read -p "$(ubs_msg CHOICE_PROMPT_1_5)" VERSION_CHOICE
@@ -211,14 +217,15 @@ fi
 
 # 빌드 번호는 앱 버전 선택과 무관하게 올린다 — App Store Connect가 요구하는 건
 # CFBundleShortVersionString이 아니라 CFBundleVersion의 단조 증가다.
-if [ "$BUNDLE_VERSION_POLICY" = "auto" ] && [ -n "$CURRENT_BUNDLE_VERSION" ]; then
-  NEW_BUNDLE_VERSION="$(next_bundle_version "$CURRENT_BUNDLE_VERSION")"
+if [ "$BUNDLE_VERSION_POLICY" = "auto" ]; then
+  EFFECTIVE_BUNDLE_VERSION="${CURRENT_BUNDLE_VERSION:-$CURRENT_VERSION}"
+  NEW_BUNDLE_VERSION="$(next_bundle_version "$EFFECTIVE_BUNDLE_VERSION")"
   if [ -n "$NEW_BUNDLE_VERSION" ]; then
     set_tauri_bundle_version "$NEW_BUNDLE_VERSION"
     BUNDLE_VERSION_CHANGED=true
-    echo -e "${GREEN}✅ $(ubs_msg TAURI_BUNDLE_VERSION_UPDATED "$CURRENT_BUNDLE_VERSION" "$NEW_BUNDLE_VERSION")${NC}"
+    echo -e "${GREEN}✅ $(ubs_msg TAURI_BUNDLE_VERSION_UPDATED "$EFFECTIVE_BUNDLE_VERSION" "$NEW_BUNDLE_VERSION")${NC}"
   else
-    echo -e "${YELLOW}$(ubs_msg TAURI_BUNDLE_VERSION_NOT_NUMERIC "$CURRENT_BUNDLE_VERSION")${NC}" >&2
+    echo -e "${YELLOW}$(ubs_msg TAURI_BUNDLE_VERSION_NOT_NUMERIC "$EFFECTIVE_BUNDLE_VERSION")${NC}" >&2
   fi
 fi
 

@@ -19,6 +19,7 @@
           <div class="side-item active">
             <span class="side-dot" aria-hidden="true"></span>
             <span data-i18n="build">Build</span>
+            <button id="add-project" class="side-add-project" type="button" aria-label="Add project folder" data-i18n-aria-label="chooseFolder">+</button>
           </div>
         </div>
 
@@ -96,11 +97,18 @@
             <fieldset class="option-card choice-card version-card">
               <legend data-i18n="versionLabel">Version</legend>
               <div class="segmented-options">
-                <label class="choice-option"><input type="radio" name="version-bump" value="none" checked><span data-i18n="versionNone">No change</span></label>
-                <label class="choice-option"><input type="radio" name="version-bump" value="build"><span data-i18n="versionBuild">Build number</span></label>
+                <label class="choice-option"><input type="radio" name="version-bump" value="none"><span data-i18n="versionNone">No change</span></label>
+                <label class="choice-option"><input type="radio" name="version-bump" value="build" checked><span data-i18n="versionBuild">Build number</span></label>
                 <label class="choice-option"><input type="radio" name="version-bump" value="patch"><span data-i18n="versionPatch">Patch</span></label>
                 <label class="choice-option"><input type="radio" name="version-bump" value="minor"><span data-i18n="versionMinor">Minor</span></label>
                 <label class="choice-option"><input type="radio" name="version-bump" value="major"><span data-i18n="versionMajor">Major</span></label>
+              </div>
+              <div id="version-preview" class="version-preview" hidden>
+                <span data-i18n="versionCurrent">Current</span>
+                <code id="current-version"></code>
+                <span class="version-arrow" aria-hidden="true">→</span>
+                <span data-i18n="versionAfter">After build</span>
+                <code id="next-version"></code>
               </div>
             </fieldset>
           </div>
