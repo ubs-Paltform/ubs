@@ -7,7 +7,18 @@
   const invoke = tauri?.core?.invoke;
   const openDialog = tauri?.dialog?.open;
   const listen = tauri?.event?.listen;
+  const projectStore = window.UBS_PROJECT_STORE;
+  const projectsKey = "ubs.saved-projects.v1";
+  const selectedProjectKey = "ubs.selected-project.v1";
+  const storage = (() => {
+    try {
+      return window.localStorage;
+    } catch {
+      return null;
+    }
+  })();
   const projects = [];
+  const savedProjects = projectStore.load(storage, projectsKey);
   const logLines = [];
   let selectedProject = null;
   let running = false;
@@ -21,6 +32,9 @@
     projectChoice: document.querySelector("#project-choice"),
     projectList: document.querySelector("#project-list"),
     projectState: document.querySelector("#project-state"),
+    savedProjects: document.querySelector("#saved-projects"),
+    savedCount: document.querySelector("#saved-count"),
+    savedEmpty: document.querySelector("#saved-empty"),
     versionBumps: [...document.querySelectorAll('input[name="version-bump"]')],
     jobs: [...document.querySelectorAll('input[name="jobs"]')],
     cleanBuild: document.querySelector("#clean-build"),
@@ -78,6 +92,103 @@
     });
   }
 
+  function projectName(path) {
+    return path.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || path;
+  }
+
+  function projectSymbol(type) {
+    return type.slice(0, 2).toUpperCase();
+  }
+
+  function rememberProjects(detected) {
+    savedProjects.splice(0, savedProjects.length, ...projectStore.merge(detected, savedProjects));
+    projectStore.save(storage, projectsKey, savedProjects);
+    renderSavedProjects();
+  }
+
+  function renderSavedProjects() {
+    elements.savedProjects.replaceChildren();
+    elements.savedCount.textContent = String(savedProjects.length);
+    elements.savedEmpty.hidden = savedProjects.length > 0;
+    savedProjects.forEach((project, index) => {
+      const row = document.createElement("div");
+      row.className = "saved-project";
+      row.classList.toggle("active", selectedProject?.path === project.path);
+
+      const select = document.createElement("button");
+      select.type = "button";
+      select.className = "saved-project-main";
+      select.dataset.action = "select";
+      select.dataset.index = String(index);
+      select.setAttribute("aria-pressed", String(selectedProject?.path === project.path));
+
+      const symbol = document.createElement("span");
+      symbol.className = "project-symbol";
+      symbol.textContent = projectSymbol(project.type);
+      const copy = document.createElement("span");
+      copy.className = "saved-project-copy";
+      const name = document.createElement("strong");
+      name.textContent = projectName(project.path);
+      const path = document.createElement("code");
+      path.textContent = project.path;
+      copy.append(name, path);
+      const type = document.createElement("span");
+      type.className = "saved-project-type";
+      type.textContent = project.type;
+      select.append(symbol, copy, type);
+
+      const build = document.createElement("button");
+      build.type = "button";
+      build.className = "quick-build-button";
+      build.dataset.action = "build";
+      build.dataset.index = String(index);
+      build.textContent = text("quickBuild");
+      build.setAttribute("aria-label", `${text("quickBuild")} · ${projectName(project.path)}`);
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "remove-project-button";
+      remove.dataset.action = "remove";
+      remove.dataset.index = String(index);
+      remove.setAttribute("aria-label", text("removeProject", { name: projectName(project.path) }));
+      remove.textContent = "×";
+      row.append(select, build, remove);
+      elements.savedProjects.append(row);
+    });
+  }
+
+  function applySelectedProject() {
+    const isFlutter = selectedProject?.type === "flutter";
+    elements.projectBadge.textContent = selectedProject?.type || text("notDetected");
+    elements.projectBadge.classList.toggle("detected", Boolean(selectedProject));
+    elements.projectPath.textContent = selectedProject?.path || text("chooseHint");
+    elements.outputFieldset.disabled = running || !isFlutter;
+    elements.outputHint.textContent = text(isFlutter ? "outputsReady" : "outputsUnavailable");
+    elements.startBuild.disabled = running || !selectedProject;
+    projectStore.saveSelectedPath(storage, selectedProjectKey, selectedProject?.path);
+    renderSavedProjects();
+    if (selectedProject) setPipeline("validate");
+    else setPipeline(null);
+  }
+
+  function selectSavedProject(project, announce = true) {
+    selectedProject = project;
+    elements.projectChoice.hidden = true;
+    applySelectedProject();
+    if (announce) setProjectState(text("projectSelected", { name: projectName(project.path) }), "success");
+  }
+
+  function removeSavedProject(index) {
+    const [removed] = savedProjects.splice(index, 1);
+    if (!removed) return;
+    projectStore.save(storage, projectsKey, savedProjects);
+    if (selectedProject?.path === removed.path) {
+      selectedProject = savedProjects[0] || null;
+    }
+    applySelectedProject();
+    setProjectState(text("projectRemoved", { name: projectName(removed.path) }), "success");
+  }
+
   function selectedOutputs() {
     return elements.outputChecks
       .filter((input) => input.checked && input.value !== "auto")
@@ -101,13 +212,7 @@
 
   function syncProject() {
     selectedProject = projects[Number(elements.projectList.value)] || null;
-    const isFlutter = selectedProject?.type === "flutter";
-    elements.projectBadge.textContent = selectedProject?.type || text("notDetected");
-    elements.projectBadge.classList.toggle("detected", Boolean(selectedProject));
-    elements.outputFieldset.disabled = !isFlutter;
-    elements.outputHint.textContent = text(isFlutter ? "outputsReady" : "outputsUnavailable");
-    elements.startBuild.disabled = !selectedProject || running;
-    if (selectedProject) setPipeline("validate");
+    applySelectedProject();
   }
 
   async function chooseFolder() {
@@ -122,10 +227,9 @@
         title: text("chooseDialog")
       });
       if (!root) return;
+      selectedProject = null;
+      applySelectedProject();
       elements.projectPath.textContent = root;
-      elements.projectBadge.textContent = text("notDetected");
-      elements.projectBadge.classList.remove("detected");
-      elements.startBuild.disabled = true;
       elements.projectChoice.hidden = true;
       setProjectState(text("detecting"));
       setPipeline("detect");
@@ -158,6 +262,7 @@
       setPipeline("detect", true);
       return;
     }
+    rememberProjects(projects);
     elements.projectChoice.hidden = projects.length === 1;
     elements.projectList.value = "0";
     setProjectState(
@@ -193,6 +298,9 @@
     });
     elements.cleanBuild.disabled = value;
     elements.projectList.disabled = value;
+    elements.savedProjects.querySelectorAll("button").forEach((button) => {
+      button.disabled = value;
+    });
     elements.outputFieldset.disabled = value || selectedProject?.type !== "flutter";
     elements.startBuild.hidden = value;
     elements.startBuild.disabled = value || !selectedProject;
@@ -293,8 +401,28 @@
   async function initialize() {
     applyLocale();
     setPipeline(null);
+    renderSavedProjects();
+    const restoredPath = projectStore.selectedPath(storage, selectedProjectKey);
+    const restored = savedProjects.find((project) => project.path === restoredPath) || savedProjects[0];
+    if (restored) {
+      selectSavedProject(restored, false);
+      setProjectState(text("restoredProjects", { count: savedProjects.length }), "success");
+    }
     elements.chooseFolder.addEventListener("click", chooseFolder);
     elements.projectList.addEventListener("change", syncProject);
+    elements.savedProjects.addEventListener("click", async (event) => {
+      const button = event.target.closest("button[data-action]");
+      if (!button || running) return;
+      const index = Number(button.dataset.index);
+      const project = savedProjects[index];
+      if (!project) return;
+      if (button.dataset.action === "remove") {
+        removeSavedProject(index);
+        return;
+      }
+      selectSavedProject(project);
+      if (button.dataset.action === "build") await startBuild();
+    });
     elements.outputChecks.forEach((input) => {
       input.addEventListener("change", () => syncOutputChecks(input));
     });

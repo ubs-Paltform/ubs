@@ -30,6 +30,7 @@ Alternatives considered:
 
 - One cyan primary action per screen.
 - Folder selection always precedes option editing and build execution.
+- Saved project rows persist locally and pair one compact build action with one removable folder target.
 - Finite option groups with five or fewer choices stay visible as segmented buttons instead of dropdowns.
 - Pipeline states use text, shape, and color together.
 - Motion is limited to active progress and short hover transitions; `prefers-reduced-motion` disables it.
