@@ -109,7 +109,22 @@
                 <label class="choice-option"><input type="radio" name="version-bump" value="major"><span data-i18n="versionMajor">Major</span></label>
               </div>
             </fieldset>
+          </div>
 
+          <fieldset id="output-fieldset" class="output-fieldset" disabled>
+            <legend data-i18n="outputsLabel">Flutter output</legend>
+            <div class="chips">
+              <label class="chip"><input type="checkbox" value="auto" checked><span data-i18n="outputAuto">Auto</span></label>
+              <label class="chip"><input type="checkbox" value="appbundle"><span>AAB</span></label>
+              <label class="chip"><input type="checkbox" value="apk"><span>APK</span></label>
+              <label class="chip"><input type="checkbox" value="ipa"><span>IPA</span></label>
+              <label class="chip"><input type="checkbox" value="pkg"><span>PKG</span></label>
+              <label class="chip"><input type="checkbox" value="web"><span>WEB</span></label>
+            </div>
+            <small id="output-hint" data-i18n="outputsUnavailable">Select a Flutter project to set outputs.</small>
+          </fieldset>
+
+          <div class="execution-grid">
             <fieldset id="jobs-card" class="option-card choice-card jobs-card" hidden>
               <legend data-i18n="jobsLabel">Build mode</legend>
               <div class="segmented-options">
@@ -129,19 +144,6 @@
               </span>
             </label>
           </div>
-
-          <fieldset id="output-fieldset" class="output-fieldset" disabled>
-            <legend data-i18n="outputsLabel">Flutter output</legend>
-            <div class="chips">
-              <label class="chip"><input type="checkbox" value="auto" checked><span data-i18n="outputAuto">Auto</span></label>
-              <label class="chip"><input type="checkbox" value="appbundle"><span>AAB</span></label>
-              <label class="chip"><input type="checkbox" value="apk"><span>APK</span></label>
-              <label class="chip"><input type="checkbox" value="ipa"><span>IPA</span></label>
-              <label class="chip"><input type="checkbox" value="pkg"><span>PKG</span></label>
-              <label class="chip"><input type="checkbox" value="web"><span>WEB</span></label>
-            </div>
-            <small id="output-hint" data-i18n="outputsUnavailable">Select a Flutter project to set outputs.</small>
-          </fieldset>
         </section>
 
         <section class="run-panel" aria-labelledby="run-heading">

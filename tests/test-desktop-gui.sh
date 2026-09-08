@@ -134,6 +134,8 @@ for current_project_contract in (
 for removed_library_contract in ('id="saved-projects"', 'id="saved-count"', 'id="saved-empty"'):
     assert removed_library_contract not in html
 assert 'id="jobs-card" class="option-card choice-card jobs-card" hidden' in html
+assert 'class="execution-grid"' in html
+assert html.index('name="version-bump"') < html.index('id="output-fieldset"') < html.index('id="jobs-card"') < html.index('id="clean-build"')
 for history_contract in ('id="build-history"', 'id="history-count"', 'id="history-empty"'):
     assert history_contract in html
 

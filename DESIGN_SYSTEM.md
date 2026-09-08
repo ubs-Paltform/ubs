@@ -33,6 +33,7 @@ Alternatives considered:
 - Folder selection always precedes option editing and build execution.
 - The project slot shows either one add action or the current removable project, never a duplicate project library.
 - Sidebar history keeps one latest build per project and restores its exact build controls when selected.
+- Build controls follow the decision order: version → Flutter outputs → sequential/parallel mode → clean build.
 - Sequential/parallel controls appear only when two or more Flutter outputs are selected.
 - Finite option groups with five or fewer choices stay visible as segmented buttons instead of dropdowns.
 - Pipeline states use text, shape, and color together.
