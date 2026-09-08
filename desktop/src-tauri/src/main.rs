@@ -193,7 +193,7 @@ fn run_build_blocking(
     let mut command = ubs_command(&prepared.runtime_root)?;
     command
         .arg("build")
-        .args(["--non-interactive", "--no-publish"])
+        .args(["--non-interactive", "--no-publish", "--verbose"])
         .arg("--project")
         .arg(&prepared.project)
         .args(["--version-bump", &prepared.version_bump])
@@ -205,6 +205,11 @@ fn run_build_blocking(
         .arg("--report-json")
         .arg(&prepared.report_path)
         .env("UBS_LANG", &prepared.locale)
+        .env("PYTHONUNBUFFERED", "1")
+        .env(
+            "UBS_FLUTTER_PARALLEL",
+            if prepared.jobs == 1 { "false" } else { "true" },
+        )
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     if !prepared.outputs.is_empty() {
@@ -418,7 +423,15 @@ fn add_common_executable_paths(command: &mut Command) {
     }
     if let Some(home) = std::env::var_os("HOME") {
         let home = PathBuf::from(home);
-        for suffix in [".cargo/bin", ".pub-cache/bin", ".local/bin"] {
+        for suffix in [
+            ".cargo/bin",
+            ".pub-cache/bin",
+            ".local/bin",
+            "Desktop/flutter/bin",
+            "Development/flutter/bin",
+            "flutter/bin",
+            ".fvm/default/bin",
+        ] {
             let path = home.join(suffix);
             if !paths.contains(&path) {
                 paths.push(path);
@@ -565,6 +578,32 @@ mod tests {
             .expect("repository root");
         assert!(root.join("build.sh").is_file());
         assert!(root.join("scripts/ubs.py").is_file());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn desktop_flutter_sdk_is_available_to_build_commands() {
+        let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
+            return;
+        };
+        let mut command = Command::new("/bin/sh");
+        add_common_executable_paths(&mut command);
+        let path = command
+            .get_envs()
+            .find(|(key, _)| *key == "PATH")
+            .and_then(|(_, value)| value)
+            .expect("PATH override");
+        assert!(std::env::split_paths(path).any(|entry| entry == home.join("Desktop/flutter/bin")));
+
+        if home.join("Desktop/flutter/bin/flutter").is_file() {
+            command.args(["-c", "command -v flutter"]);
+            let output = command.output().expect("Flutter lookup");
+            assert!(output.status.success());
+            assert_eq!(
+                String::from_utf8_lossy(&output.stdout).trim(),
+                home.join("Desktop/flutter/bin/flutter").to_string_lossy()
+            );
+        }
     }
 
     #[cfg(unix)]
