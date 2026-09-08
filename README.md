@@ -11,6 +11,7 @@ This document is grounded entirely in the current `build.sh`, `install.sh`, `scr
 - [What it does](#what-it-does)
 - [Pipeline overview](#pipeline-overview)
 - [Architecture](#architecture)
+- [Desktop UI](#desktop-ui)
 - [CLI reference](#cli-reference)
 - [Detected project types & adapters](#detected-project-types--adapters)
 - [Build adapters in depth](#build-adapters-in-depth)
@@ -111,6 +112,22 @@ flowchart TD
 | `scripts/ubs_mcp.py` | Dependency-free stdio MCP server wrapping the same core |
 | `native/ubs-helper` | Optional Rust binary: SHA-256 hashing and batch manifest verification, with a portable Python fallback when it isn't built |
 | `scripts/lib/i18n.sh` + `i18n_messages.sh` / `scripts/i18n.py` + `i18n_messages.py` | Independent bash and Python message catalogs behind `UBS_LANG` |
+
+## Desktop UI
+
+`desktop/` is an optional Tauri 2 window over the same `build.sh` engine. It uses the operating-system WebView plus plain HTML/CSS/JavaScript: no React, Vite, Node runtime, local web server, analytics, or remote assets. The interface follows the OS language for Korean, English, Japanese, and Chinese, falling back to English.
+
+```bash
+# Develop from source
+cd desktop/src-tauri
+cargo run
+
+# Build the native application bundle (tauri-cli 2.11.4 required)
+cargo install tauri-cli --version 2.11.4 --locked
+cargo tauri build
+```
+
+The native folder picker can open a project or monorepo root. Detected projects, version change, bounded parallel jobs, incremental/clean mode, and Flutter outputs are selectable in the window. Every GUI build forces `--non-interactive --no-publish`; values are allow-listed before they reach the subprocess, only one build runs at a time, and Cancel terminates the build process group. Packaged apps carry the same UBS scripts as read-only resources. Visual tokens and interaction rules live in [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md).
 
 ## CLI reference
 

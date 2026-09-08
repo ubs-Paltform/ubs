@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark">
+    <title>UBS</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="catalog.js" defer></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main" data-i18n="skip">Skip to build controls</a>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="UBS">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="brand-word">UBS</span>
+        </div>
+
+        <div class="side-section">
+          <p class="side-label" data-i18n="workspace">Workspace</p>
+          <div class="side-item active">
+            <span class="side-dot" aria-hidden="true"></span>
+            <span data-i18n="build">Build</span>
+          </div>
+        </div>
+
+        <div class="side-meta">
+          <div class="safety-row">
+            <span class="safety-pulse" aria-hidden="true"></span>
+            <span data-i18n="localOnly">Local only</span>
+          </div>
+          <p data-i18n="noRemote">No remote service or upload</p>
+          <span class="version">v3.11.1</span>
+        </div>
+      </aside>
+
+      <main id="main" class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow" data-i18n="eyebrow">RELEASE CONTROL</p>
+            <h1 data-i18n="title">Build with confidence.</h1>
+            <p class="lede" data-i18n="subtitle">Choose a project. UBS handles the release path.</p>
+          </div>
+          <div class="locale-pill" aria-label="Interface language">
+            <span class="globe" aria-hidden="true">◎</span>
+            <span id="locale-name">English</span>
+          </div>
+        </header>
+
+        <section class="project-panel" aria-labelledby="project-heading">
+          <div class="section-heading">
+            <div>
+              <span class="step-number">01</span>
+              <h2 id="project-heading" data-i18n="project">Project</h2>
+            </div>
+            <span id="project-badge" class="type-badge" data-i18n="notDetected">Not detected</span>
+          </div>
+
+          <button id="choose-folder" class="project-picker" type="button">
+            <span class="folder-icon" aria-hidden="true"></span>
+            <span class="project-copy">
+              <strong data-i18n="chooseFolder">Choose project folder</strong>
+              <small id="project-path" data-i18n="chooseHint">A project or monorepo root</small>
+            </span>
+            <span class="picker-action" data-i18n="browse">Browse</span>
+          </button>
+
+          <div id="project-choice" class="project-choice" hidden>
+            <label for="project-list" data-i18n="detectedProject">Detected project</label>
+            <select id="project-list"></select>
+          </div>
+          <p id="project-state" class="project-state" role="status" aria-live="polite" data-i18n="waitingProject">Waiting for a project.</p>
+        </section>
+
+        <section class="options-panel" aria-labelledby="options-heading">
+          <div class="section-heading">
+            <div>
+              <span class="step-number">02</span>
+              <h2 id="options-heading" data-i18n="options">Build options</h2>
+            </div>
+            <span class="recommended" data-i18n="safeDefaults">Safe defaults</span>
+          </div>
+
+          <div class="option-grid">
+            <label class="option-card" for="version-bump">
+              <span data-i18n="versionLabel">Version</span>
+              <select id="version-bump">
+                <option value="none" data-i18n="versionNone">No change</option>
+                <option value="build" data-i18n="versionBuild">Build number</option>
+                <option value="patch" data-i18n="versionPatch">Patch</option>
+                <option value="minor" data-i18n="versionMinor">Minor</option>
+                <option value="major" data-i18n="versionMajor">Major</option>
+              </select>
+            </label>
+
+            <label class="option-card" for="jobs">
+              <span data-i18n="jobsLabel">Parallel jobs</span>
+              <select id="jobs">
+                <option value="0" data-i18n="jobsAuto">Auto · capped at 4</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="4">4</option>
+                <option value="8">8</option>
+              </select>
+            </label>
+
+            <label class="option-card toggle-card" for="clean-build">
+              <span>
+                <span data-i18n="cleanLabel">Clean rebuild</span>
+                <small data-i18n="cleanHint">Off keeps caches for speed</small>
+              </span>
+              <span class="switch">
+                <input id="clean-build" type="checkbox">
+                <span aria-hidden="true"></span>
+              </span>
+            </label>
+          </div>
+
+          <fieldset id="output-fieldset" class="output-fieldset" disabled>
+            <legend data-i18n="outputsLabel">Flutter output</legend>
+            <div class="chips">
+              <label class="chip"><input type="checkbox" value="auto" checked><span data-i18n="outputAuto">Auto</span></label>
+              <label class="chip"><input type="checkbox" value="appbundle"><span>AAB</span></label>
+              <label class="chip"><input type="checkbox" value="apk"><span>APK</span></label>
+              <label class="chip"><input type="checkbox" value="ipa"><span>IPA</span></label>
+              <label class="chip"><input type="checkbox" value="pkg"><span>PKG</span></label>
+              <label class="chip"><input type="checkbox" value="web"><span>WEB</span></label>
+            </div>
+            <small id="output-hint" data-i18n="outputsUnavailable">Select a Flutter project to set outputs.</small>
+          </fieldset>
+        </section>
+
+        <section class="run-panel" aria-labelledby="run-heading">
+          <div class="section-heading compact">
+            <div>
+              <span class="step-number">03</span>
+              <h2 id="run-heading" data-i18n="pipeline">Pipeline</h2>
+            </div>
+            <span id="run-status" class="run-status" data-i18n="ready">Ready</span>
+          </div>
+
+          <ol id="pipeline" class="pipeline" aria-label="Build pipeline">
+            <li data-stage="detect"><span></span><strong data-i18n="stageDetect">Detect</strong></li>
+            <li data-stage="validate"><span></span><strong data-i18n="stageValidate">Validate</strong></li>
+            <li data-stage="build"><span></span><strong data-i18n="stageBuild">Build</strong></li>
+            <li data-stage="package"><span></span><strong data-i18n="stagePackage">Package</strong></li>
+            <li data-stage="done"><span></span><strong data-i18n="stageDone">Done</strong></li>
+          </ol>
+
+          <div class="run-actions">
+            <div class="guardrail">
+              <span aria-hidden="true">◇</span>
+              <span data-i18n="guardrail">Non-interactive · upload disabled</span>
+            </div>
+            <button id="cancel-build" class="secondary-button" type="button" hidden data-i18n="cancel">Cancel</button>
+            <button id="start-build" class="primary-button" type="button" disabled>
+              <span data-i18n="startBuild">Start build</span>
+              <span aria-hidden="true">→</span>
+            </button>
+          </div>
+        </section>
+
+        <section id="console-panel" class="console-panel" aria-labelledby="console-heading" hidden>
+          <div class="console-head">
+            <h2 id="console-heading" data-i18n="buildLog">Build log</h2>
+            <span id="elapsed">00:00</span>
+          </div>
+          <pre id="build-log" role="log" aria-live="polite" aria-relevant="additions text"></pre>
+          <div id="build-result" class="build-result" aria-live="polite"></div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
