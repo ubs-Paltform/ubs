@@ -30,16 +30,19 @@ Alternatives considered:
 
 - One cyan primary action per screen.
 - The utility view opens on project controls without a marketing headline.
+- The sidebar starts directly with workspace controls; the operating-system language indicator sits at the lower left instead of a separate top bar.
 - Folder selection always precedes option editing and build execution.
 - The project slot shows either one add action or the current removable project, never a duplicate project library.
 - Sidebar history keeps one latest build per project and restores its exact build controls when selected.
 - Build controls follow the decision order: version → Flutter outputs → sequential/parallel mode → clean build.
 - Sequential/parallel controls appear only when two or more Flutter outputs are selected.
+- Flutter exposes only explicit outputs and starts new projects with AAB + IPA selected; at least one output always remains selected.
 - Finite option groups with five or fewer choices stay visible as segmented buttons instead of dropdowns.
 - Pipeline states use text, shape, and color together.
 - Wide windows keep controls on the left and a sticky, full-height build log on the right; narrow windows stack both in one column.
+- The macOS window opens at 1482 × 986 content pixels, matching the 1482 × 1021 reference including the title bar; it remains resizable down to 860 × 620.
 - The build log remains visible before execution, preserves live output and artifacts, and exposes a localized copy action with accessible success or failure feedback.
-- Every reported artifact keeps its exact path visible and provides a direct Finder action.
+- Every reported artifact keeps its exact path visible and provides a direct Finder action below the build command, leaving the log panel output-only.
 - Motion is limited to active progress and short hover transitions; `prefers-reduced-motion` disables it.
 - The operating-system language selects `ko`, `en`, `ja`, or `zh`; all other languages fall back to English.
 - Keyboard focus remains visible. Logs use a live region and never inject HTML.

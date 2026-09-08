@@ -14,11 +14,6 @@
     <a class="skip-link" href="#main" data-i18n="skip">Skip to build controls</a>
     <div class="app-shell">
       <aside class="sidebar" aria-label="UBS">
-        <div class="brand">
-          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
-          <span class="brand-word">UBS</span>
-        </div>
-
         <div class="side-section">
           <p class="side-label" data-i18n="workspace">Workspace</p>
           <div class="side-item active">
@@ -44,16 +39,13 @@
           <p data-i18n="noRemote">No remote service or upload</p>
           <span class="version">v3.11.1</span>
         </div>
+        <div class="locale-pill" aria-label="Interface language">
+          <span class="globe" aria-hidden="true">◎</span>
+          <span id="locale-name">English</span>
+        </div>
       </aside>
 
       <main id="main" class="workspace">
-        <header class="topbar">
-          <div class="locale-pill" aria-label="Interface language">
-            <span class="globe" aria-hidden="true">◎</span>
-            <span id="locale-name">English</span>
-          </div>
-        </header>
-
         <div class="workbench">
           <div class="controls-column">
         <section class="project-panel" aria-labelledby="project-heading">
@@ -116,10 +108,9 @@
           <fieldset id="output-fieldset" class="output-fieldset" disabled>
             <legend data-i18n="outputsLabel">Flutter output</legend>
             <div class="chips">
-              <label class="chip"><input type="checkbox" value="auto" checked><span data-i18n="outputAuto">Auto</span></label>
-              <label class="chip"><input type="checkbox" value="appbundle"><span>AAB</span></label>
+              <label class="chip"><input type="checkbox" value="appbundle" checked><span>AAB</span></label>
               <label class="chip"><input type="checkbox" value="apk"><span>APK</span></label>
-              <label class="chip"><input type="checkbox" value="ipa"><span>IPA</span></label>
+              <label class="chip"><input type="checkbox" value="ipa" checked><span>IPA</span></label>
               <label class="chip"><input type="checkbox" value="pkg"><span>PKG</span></label>
               <label class="chip"><input type="checkbox" value="web"><span>WEB</span></label>
             </div>
@@ -170,11 +161,14 @@
               <span aria-hidden="true">◇</span>
               <span data-i18n="guardrail">Non-interactive · upload disabled</span>
             </div>
-            <button id="cancel-build" class="secondary-button" type="button" hidden data-i18n="cancel">Cancel</button>
-            <button id="start-build" class="primary-button" type="button" disabled>
-              <span data-i18n="startBuild">Start build</span>
-              <span aria-hidden="true">→</span>
-            </button>
+            <div class="run-command-stack">
+              <button id="cancel-build" class="secondary-button" type="button" hidden data-i18n="cancel">Cancel</button>
+              <button id="start-build" class="primary-button" type="button" disabled>
+                <span data-i18n="startBuild">Start build</span>
+                <span aria-hidden="true">→</span>
+              </button>
+              <div id="build-result" class="build-result" aria-live="polite"></div>
+            </div>
           </div>
         </section>
           </div>
@@ -189,7 +183,6 @@
             <span id="copy-log-status" class="visually-hidden" role="status" aria-live="polite"></span>
           </div>
           <pre id="build-log" role="log" aria-live="polite" aria-relevant="additions text"></pre>
-          <div id="build-result" class="build-result" aria-live="polite"></div>
         </section>
         </div>
       </main>

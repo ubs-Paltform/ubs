@@ -128,9 +128,7 @@
       minor: "versionMinor",
       major: "versionMajor"
     };
-    const outputs = normalized.outputs[0] === "auto"
-      ? text("outputAuto")
-      : normalized.outputs.map((output) => output.toUpperCase()).join("+");
+    const outputs = normalized.outputs.map((output) => output.toUpperCase()).join("+");
     return [
       text(versionKeys[normalized.versionBump]),
       text(normalized.jobs === 1 ? "jobsSequential" : "jobsParallel"),
@@ -257,7 +255,7 @@
   }
 
   function syncBuildModeVisibility() {
-    const outputCount = elements.outputChecks.filter((input) => input.checked && input.value !== "auto").length;
+    const outputCount = elements.outputChecks.filter((input) => input.checked).length;
     const showBuildMode = selectedProject?.type === "flutter" && outputCount >= 2;
     elements.jobsCard.hidden = !showBuildMode;
     if (!showBuildMode) {
@@ -268,14 +266,7 @@
   }
 
   function syncOutputChecks(changed) {
-    const auto = elements.outputChecks.find((input) => input.value === "auto");
-    const explicit = elements.outputChecks.filter((input) => input.value !== "auto");
-    if (changed.value === "auto" && changed.checked) {
-      explicit.forEach((input) => { input.checked = false; });
-    } else if (changed.value !== "auto" && changed.checked) {
-      auto.checked = false;
-    }
-    if (!elements.outputChecks.some((input) => input.checked)) auto.checked = true;
+    if (!elements.outputChecks.some((input) => input.checked)) changed.checked = true;
     syncBuildModeVisibility();
   }
 
@@ -506,7 +497,7 @@
         request: {
           project: project.path,
           versionBump: settings.versionBump,
-          outputs: project.type === "flutter" ? settings.outputs.filter((output) => output !== "auto") : [],
+          outputs: project.type === "flutter" ? settings.outputs : [],
           jobs: settings.jobs,
           clean: settings.clean,
           locale
