@@ -61,10 +61,17 @@ class Assets(HTMLParser):
         if tag == "style":
             self.inline_styles += 1
 
+html = (root / "ui/index.html").read_text(encoding="utf-8")
 parser = Assets()
-parser.feed((root / "ui/index.html").read_text(encoding="utf-8"))
+parser.feed(html)
 assert parser.inline_scripts == 0
 assert parser.inline_styles == 0
+assert '<select id="version-bump">' not in html
+assert '<select id="jobs">' not in html
+assert html.count('name="version-bump"') == 5
+assert html.count('name="jobs"') == 5
+assert html.count('name="version-bump" value="none" checked') == 1
+assert html.count('name="jobs" value="0" checked') == 1
 
 frontend = "\n".join(path.read_text(encoding="utf-8") for path in (root / "ui").iterdir())
 assert "https://" not in frontend and "http://" not in frontend
