@@ -39,6 +39,7 @@
     "active": true,
     "category": "DeveloperTool",
     "shortDescription": "Fast, safe release builds",
+    "icon": ["icons/icon.icns"],
     "macOS": {
       "signingIdentity": "-"
     },

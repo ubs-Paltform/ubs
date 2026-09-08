@@ -104,6 +104,8 @@ assert set(config["bundle"]["resources"].values()) >= {
     "ubs-runtime/skills/universal-build/", "ubs-runtime/templates/", "ubs-runtime/VERSION"
 }
 assert config["bundle"]["macOS"]["signingIdentity"] == "-"
+assert "icons/icon.icns" in config["bundle"]["icon"]
+assert (root / "src-tauri/icons/icon.icns").is_file()
 
 capability = json.loads((root / "src-tauri/capabilities/default.json").read_text(encoding="utf-8"))
 assert capability["windows"] == ["main"]
@@ -137,7 +139,10 @@ assert 'value="auto"' not in html
 assert html.count('value="appbundle" checked') == 1
 assert html.count('value="ipa" checked') == 1
 assert 'class="brand"' not in html
-assert html.index('class="side-meta"') < html.index('id="locale-name"') < html.index('</aside>')
+assert html.index('class="side-meta"') < html.index('class="locale-pill"') < html.index('</aside>')
+assert html.count('class="locale-option"') == 2
+assert 'data-locale="ko">한국어</button>' in html
+assert 'data-locale="en">English</button>' in html
 assert 'data-i18n="jobsSequential"' in html
 assert 'data-i18n="jobsParallel"' in html
 assert '<h1' not in html
@@ -153,6 +158,7 @@ for version_preview_contract in ('id="version-preview"', 'id="current-version"',
     assert version_preview_contract in html
 for removed_library_contract in ('id="saved-projects"', 'id="saved-count"', 'id="saved-empty"'):
     assert removed_library_contract not in html
+assert 'id="output-fieldset" class="output-fieldset" hidden disabled' in html
 assert 'id="jobs-card" class="option-card choice-card jobs-card" hidden' in html
 assert 'class="execution-grid"' in html
 assert html.index('name="version-bump"') < html.index('id="output-fieldset"') < html.index('id="jobs-card"') < html.index('id="clean-build"')
@@ -184,6 +190,8 @@ for guardrail in ('"--non-interactive"', '"--no-publish"', "slot.active", "termi
 app = (root / "ui/app.js").read_text(encoding="utf-8")
 for app_contract in ("projectStore", "saveCurrentProject", "syncBuildModeVisibility", "outputCount >= 2", "canonical_directory", "install_bundled_ubs"):
     assert app_contract in app or app_contract in rust
+assert 'elements.outputFieldset.hidden = !isFlutter' in app
+assert 'const localeKey = "ubs.locale.v1"' in app
 assert 'elements.addProject.addEventListener("click", chooseFolder)' in app
 assert 'projectStore.normalizeSettings());' in app
 assert 'selectProject({ path: record.path, type: record.type }, true, true, true)' in app
