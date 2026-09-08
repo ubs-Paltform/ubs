@@ -76,7 +76,9 @@ PY
 
 printf '%s\n' '#!/usr/bin/env bash' \
   'if [ "${1:-}" = "--version" ]; then echo 3.35.0; exit 0; fi' \
+  '[ -z "${UBS_TEST_LOG:-}" ] || printf "%s\n" "$*" >> "$UBS_TEST_LOG"' \
   'if [ "${1:-} ${2:-}" = "build web" ] && [ ! -e build/web/index.html ]; then mkdir -p build/web; : > build/web/index.html; fi' \
+  'if [ "${1:-} ${2:-}" = "build apk" ]; then mkdir -p build/app/outputs/flutter-apk; : > build/app/outputs/flutter-apk/app-release.apk; fi' \
   > "$FIXTURE/bin/flutter"
 chmod +x "$FIXTURE/bin/flutter"
 printf '%s\n' 'name: fixture' 'version: 1.0.0+1' 'dependencies:' '  flutter:' '    sdk: flutter' \
@@ -120,5 +122,28 @@ from pathlib import Path
 artifacts = json.load(open(sys.argv[1], encoding="utf-8"))["results"][0]["artifacts"]
 assert artifacts == [str(Path(sys.argv[2]).resolve())], artifacts
 PY
+
+# APK 1개 선택은 ABI별 3개가 아니라 universal APK 하나만 생성/보고한다.
+APK_DIR="$FIXTURE/flutter/build/app/outputs/flutter-apk"
+mkdir -p "$APK_DIR"
+: > "$APK_DIR/app-arm64-v8a-release.apk"
+: > "$APK_DIR/app-armeabi-v7a-release.apk"
+: > "$APK_DIR/app-x86_64-release.apk"
+APK_REPORT_PATH="$FIXTURE/flutter-apk-report.json"
+FLUTTER_LOG="$FIXTURE/flutter-apk.log"
+PATH="$FIXTURE/bin:$PATH" UBS_NO_OPEN=true UBS_TEST_LOG="$FLUTTER_LOG" \
+  "$ROOT/build.sh" build --non-interactive --version-bump none --flutter-outputs apk \
+  --skip-clean --report-json "$APK_REPORT_PATH" --project "$FIXTURE/flutter" >/dev/null
+python3 - "$APK_REPORT_PATH" "$APK_DIR/app-release.apk" <<'PY'
+import json, sys
+from pathlib import Path
+artifacts = json.load(open(sys.argv[1], encoding="utf-8"))["results"][0]["artifacts"]
+assert artifacts == [str(Path(sys.argv[2]).resolve())], artifacts
+PY
+grep -Fq 'build apk --release' "$FLUTTER_LOG"
+if grep -Fq -- '--split-per-abi' "$FLUTTER_LOG"; then
+  echo "Flutter APK 빌드가 ABI 분할 옵션을 사용했습니다." >&2
+  exit 1
+fi
 
 echo "버전 커밋 보호 테스트 통과"

@@ -329,12 +329,16 @@ build_android() {
 
 build_apk() {
   echo -e "${YELLOW}🤖 $(ubs_msg STEP_BUILD_APK)${NC}"
+  # --skip-clean 재빌드에서도 예전 ABI 분할 APK가 산출물로 다시 잡히지 않게
+  # 생성 파일만 비운 뒤 universal APK(app-release.apk) 하나를 만든다.
+  if [ -d "$APK_OUT" ]; then
+    find "$APK_OUT" -maxdepth 1 -type f -name '*.apk' -delete
+  fi
   flutter build apk --release \
     $DART_DEFINE \
     --obfuscate \
     --split-debug-info=build/app/outputs/symbols \
-    --tree-shake-icons \
-    --split-per-abi
+    --tree-shake-icons
 }
 
 build_ios() {
