@@ -38,19 +38,22 @@ check_contains "$JA_PY_HELP" "使い方:" "python ubs.py --help(ja)에 '使い�
 ZH_PY_HELP="$(UBS_LANG=zh python3 "$ROOT/scripts/ubs.py" --help 2>&1)"
 check_contains "$ZH_PY_HELP" "用法:" "python ubs.py --help(zh)에 '用法:'가 없습니다."
 
-# --- 3) 비대화형 실행 경로(--dry-run --all, 이 레포 자체를 대상)도 언어별로 렌더링되는지 ---
-# 이 레포 루트에는 빌드 가능한 프로젝트가 없어 명령 자체는 exit 1이지만
-# (의도된 동작), 여기서는 언어별 출력 문구만 검증하므로 exit 코드는 무시한다.
+# --- 3) 비대화형 실행 경로(--dry-run --all)도 언어별로 렌더링되는지 ---
+# 빌드 가능한 프로젝트가 없는 격리 폴더를 사용한다. UBS 저장소 자체에는
+# optional desktop GUI처럼 실제로 감지되어야 하는 하위 프로젝트가 있을 수 있다.
 
-EN_RUN="$(UBS_NON_INTERACTIVE=true UBS_LANG=en bash "$ROOT/build.sh" --dry-run --all "$ROOT" 2>&1 || true)"
+EMPTY_ROOT="$(mktemp -d)"
+trap 'rm -rf "$EMPTY_ROOT"' EXIT
+
+EN_RUN="$(UBS_NON_INTERACTIVE=true UBS_LANG=en bash "$ROOT/build.sh" --dry-run --all "$EMPTY_ROOT" 2>&1 || true)"
 check_contains "$EN_RUN" "No projects match the given conditions." \
   "비대화형 dry-run(en) 출력에 예상 문구가 없습니다."
 
-JA_RUN="$(UBS_NON_INTERACTIVE=true UBS_LANG=ja bash "$ROOT/build.sh" --dry-run --all "$ROOT" 2>&1 || true)"
+JA_RUN="$(UBS_NON_INTERACTIVE=true UBS_LANG=ja bash "$ROOT/build.sh" --dry-run --all "$EMPTY_ROOT" 2>&1 || true)"
 check_contains "$JA_RUN" "条件に一致するプロジェクトがありません。" \
   "비대화형 dry-run(ja) 출력에 예상 문구가 없습니다."
 
-ZH_RUN="$(UBS_NON_INTERACTIVE=true UBS_LANG=zh bash "$ROOT/build.sh" --dry-run --all "$ROOT" 2>&1 || true)"
+ZH_RUN="$(UBS_NON_INTERACTIVE=true UBS_LANG=zh bash "$ROOT/build.sh" --dry-run --all "$EMPTY_ROOT" 2>&1 || true)"
 check_contains "$ZH_RUN" "没有符合条件的项目。" \
   "비대화형 dry-run(zh) 출력에 예상 문구가 없습니다."
 
@@ -107,7 +110,7 @@ PY
 # --- 5) 비대화형 실제 빌드는 성공 chatter를 줄이고 완료 문구를 사용자 언어로 표시한다. ---
 
 FIXTURE="$(mktemp -d)"
-trap 'rm -rf "$FIXTURE"' EXIT
+trap 'rm -rf "$EMPTY_ROOT" "$FIXTURE"' EXIT
 mkdir -p "$FIXTURE/bin" "$FIXTURE/app"
 printf '%s\n' '#!/usr/bin/env bash' 'echo ordinary-adapter-chatter' > "$FIXTURE/bin/npm"
 chmod +x "$FIXTURE/bin/npm"

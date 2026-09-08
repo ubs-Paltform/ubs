@@ -28,6 +28,7 @@ macos/ExportOptions.plist
 build/
 dist/
 target/
+desktop/src-tauri/gen/
 node_modules/
 .dart_tool/
 .gradle/
