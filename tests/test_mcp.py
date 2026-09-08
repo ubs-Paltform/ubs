@@ -85,6 +85,20 @@ class McpServerTests(unittest.TestCase):
             names = [item["name"] for item in responses[0]["result"]["tools"]]
             self.assertIn("ubs_build", names)
 
+    def test_jobs_omitted_keeps_cli_auto_parallelism(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary).resolve()
+            with mock.patch.object(mcp, "SERVER_ROOT", workspace), \
+                    mock.patch.object(mcp, "ALLOW_BUILD", True), \
+                    mock.patch.object(mcp, "run_ubs", return_value=(0, "[]", "")) as run:
+                mcp.call_tool("ubs_plan", {"path": "."})
+                mcp.call_tool("ubs_build", {"path": ".", "dry_run": True})
+                mcp.call_tool("ubs_plan", {"path": ".", "jobs": 3})
+            commands = [call.args[0] for call in run.call_args_list]
+            self.assertNotIn("--jobs", commands[0])
+            self.assertNotIn("--jobs", commands[1])
+            self.assertEqual(commands[2][commands[2].index("--jobs") + 1], "3")
+
     def test_run_ubs_times_out_and_bounds_output(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             workspace = Path(temporary).resolve()

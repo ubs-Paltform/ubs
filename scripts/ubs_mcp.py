@@ -73,7 +73,10 @@ def available_tools() -> List[dict]:
         tool_schema("ubs_audit", "Audit build optimization", "Audit optimization and obfuscation settings.", COMMON_PROPERTIES),
         tool_schema("ubs_plan", "Plan builds", "Return the resolved, read-only build plan.", {
             **COMMON_PROPERTIES,
-            "jobs": {"type": "integer", "minimum": 1, "default": 1},
+            "jobs": {
+                "type": "integer", "minimum": 1,
+                "description": "Parallel project limit. Omit for bounded CPU-based auto selection.",
+            },
             "flutter_outputs": {"type": "string", "default": "auto"},
         }),
         tool_schema("ubs_graph", "Inspect dependency graph", "Return inferred dependencies and topological build layers.", COMMON_PROPERTIES),
@@ -83,7 +86,10 @@ def available_tools() -> List[dict]:
         tools.append(tool_schema("ubs_build", "Build projects", "Run a dry-run or an explicitly confirmed local build.", {
             **COMMON_PROPERTIES,
             "project": PATH_PROPERTY,
-            "jobs": {"type": "integer", "minimum": 1, "default": 1},
+            "jobs": {
+                "type": "integer", "minimum": 1,
+                "description": "Parallel project limit. Omit for bounded CPU-based auto selection.",
+            },
             "dry_run": {"type": "boolean", "default": True},
             "confirm": {"type": "boolean", "default": False},
         }))
@@ -259,13 +265,17 @@ def call_tool(name: str, arguments: object, identifier: object = None) -> dict:
         command_name = name.removeprefix("ubs_")
         command = [command_name, "--json", *common]
         if name == "ubs_plan":
-            jobs = arguments.get("jobs", 1)
-            if not isinstance(jobs, int) or isinstance(jobs, bool) or jobs < 1:
+            jobs = arguments.get("jobs")
+            if jobs is not None and (
+                not isinstance(jobs, int) or isinstance(jobs, bool) or jobs < 1
+            ):
                 raise ValueError("jobs must be an integer greater than zero")
             outputs = arguments.get("flutter_outputs", "auto")
             if not isinstance(outputs, str):
                 raise ValueError("flutter_outputs must be a string")
-            command.extend(["--jobs", str(jobs), "--flutter-outputs", outputs])
+            if jobs is not None:
+                command.extend(["--jobs", str(jobs)])
+            command.extend(["--flutter-outputs", outputs])
         command.append(str(path))
         status, stdout, stderr = run_ubs(command, identifier)
         structured = None
@@ -296,10 +306,14 @@ def call_tool(name: str, arguments: object, identifier: object = None) -> dict:
             raise ValueError("dry_run and confirm must be booleans")
         if not dry_run and not confirm:
             raise ValueError("non-dry-run builds require confirm=true")
-        jobs = arguments.get("jobs", 1)
-        if not isinstance(jobs, int) or isinstance(jobs, bool) or jobs < 1:
+        jobs = arguments.get("jobs")
+        if jobs is not None and (
+            not isinstance(jobs, int) or isinstance(jobs, bool) or jobs < 1
+        ):
             raise ValueError("jobs must be an integer greater than zero")
-        command = ["build", *common, "--jobs", str(jobs)]
+        command = ["build", *common]
+        if jobs is not None:
+            command.extend(["--jobs", str(jobs)])
         project = arguments.get("project")
         if project is not None:
             command.extend(["--project", str(resolve_scoped_path(project))])
