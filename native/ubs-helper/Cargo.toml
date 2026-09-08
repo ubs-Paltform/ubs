@@ -6,7 +6,7 @@ license = "MIT"
 description = "Optional native integrity helper for Universal Build Script"
 
 [dependencies]
-sha2 = "0.10"
+sha2 = "0.11"
 
 [profile.release]
 lto = "thin"
