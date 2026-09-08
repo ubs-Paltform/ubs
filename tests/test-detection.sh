@@ -278,6 +278,13 @@ grep -Fqx 'run build' "$FIXTURE/node.log" || {
 
 printf '%s\n' '#!/usr/bin/env bash' \
   'printf "%s\n" "$*" >> "$UBS_TEST_LOG"' \
+  'if [ -n "${UBS_TEST_SYNC_DIR:-}" ] && [ "$1" = build ]; then' \
+  '  case "$2" in apk) other=ipa ;; ipa) other=apk ;; *) exit 0 ;; esac' \
+  '  touch "$UBS_TEST_SYNC_DIR/$2"' \
+  '  attempts=0' \
+  '  while [ ! -f "$UBS_TEST_SYNC_DIR/$other" ] && [ "$attempts" -lt 100 ]; do sleep 0.01; attempts=$((attempts + 1)); done' \
+  '  [ -f "$UBS_TEST_SYNC_DIR/$other" ] || exit 19' \
+  'fi' \
   'if [ "${UBS_TEST_FAIL:-false}" = true ] && [ "$1 $2" = "build appbundle" ]; then exit 7; fi' \
   > "$FIXTURE/bin/flutter"
 chmod +x "$FIXTURE/bin/flutter"
@@ -313,6 +320,21 @@ grep -Fq 'build web --release' "$FIXTURE/flutter-outputs.log" || {
   echo "Flutter 다중 출력에서 Web이 실행되지 않았습니다." >&2
   exit 1
 }
+
+mkdir -p "$FIXTURE/flutter-parallel-sync"
+: > "$FIXTURE/flutter-parallel.log"
+PATH="$FIXTURE/bin:$PATH" UBS_TEST_LOG="$FIXTURE/flutter-parallel.log" \
+  UBS_TEST_SYNC_DIR="$FIXTURE/flutter-parallel-sync" UBS_RUNTIME_ROOT="$REPO_DIR" \
+  UBS_NON_INTERACTIVE=true UBS_FLUTTER_PARALLEL=true UBS_VERSION_BUMP=none \
+  UBS_FLUTTER_OUTPUTS=apk,ipa UBS_SKIP_CLEAN=true UBS_NO_NOTIFY=true \
+  bash -c 'cd "$1" && bash "$2"' _ \
+  "$FIXTURE/apps/mobile" "$REPO_DIR/scripts/build-flutter.sh"
+for output in apk ipa; do
+  [ -f "$FIXTURE/flutter-parallel-sync/$output" ] || {
+    echo "Flutter 병렬 출력에서 $output 빌드가 실행되지 않았습니다." >&2
+    exit 1
+  }
+done
 
 : > "$FIXTURE/flutter-ipa.log"
 PATH="$FIXTURE/bin:$PATH" UBS_TEST_LOG="$FIXTURE/flutter-ipa.log" \
