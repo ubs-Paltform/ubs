@@ -226,6 +226,21 @@ case $PLATFORM_CHOICE in
 esac
 fi
 
+# Python 오케스트레이터에 이번 실행이 선택한 출력만 전달한다.
+# UP-TO-DATE 산출물은 mtime이 바뀐지 않아도 유효하며, 미선택 플랫폼의
+# 예전 산출물은 결과/보고/발행 대상에서 제외해야 한다.
+if [ -n "${UBS_INTERNAL_ARTIFACT_SCOPE_FILE:-}" ] && \
+   [ -f "$UBS_INTERNAL_ARTIFACT_SCOPE_FILE" ] && \
+   [ ! -L "$UBS_INTERNAL_ARTIFACT_SCOPE_FILE" ]; then
+  {
+    if [ "$BUILD_ANDROID" = true ]; then printf '%s\n' appbundle; fi
+    if [ "$BUILD_APK" = true ]; then printf '%s\n' apk; fi
+    if [ "$BUILD_IOS" = true ]; then printf '%s\n' ipa; fi
+    if [ "$BUILD_WEB" = true ]; then printf '%s\n' web; fi
+    if [ "$BUILD_MACOS" = true ]; then printf '%s\n' pkg; fi
+  } > "$UBS_INTERNAL_ARTIFACT_SCOPE_FILE"
+fi
+
 PARALLEL_BUILD=false
 PARALLEL_PREFS_FILE="$SCRIPT_DIR/.build_prefs"
 
