@@ -63,10 +63,31 @@ node_dependency_sha256() {
 node_dependency_digest() {
   command -v node >/dev/null 2>&1 && node --version
   command -v "$NODE_PM" >/dev/null 2>&1 && "$NODE_PM" --version
-  local file
-  for file in package.json package-lock.json pnpm-lock.yaml yarn.lock npm-shrinkwrap.json bun.lock bun.lockb .yarnrc.yml; do
-    [ -f "$file" ] && { printf '%s\n' "$file"; cat "$file"; }
-  done
+  python3 <<'PY'
+import os
+from pathlib import Path
+import sys
+
+root = Path(".")
+excluded = {".git", "node_modules", "build", "dist", "target", ".gradle", ".next", ".ubs"}
+names = {
+    "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock",
+    "npm-shrinkwrap.json", "bun.lock", "bun.lockb", ".npmrc", ".yarnrc",
+    ".yarnrc.yml", "pnpm-workspace.yaml", "pnpmfile.cjs", ".pnpmfile.cjs",
+    ".node-version", ".nvmrc",
+}
+paths = []
+for current, directories, files in os.walk(root):
+    directories[:] = sorted(item for item in directories if item not in excluded)
+    relative_dir = Path(current).relative_to(root)
+    for name in sorted(files):
+        relative = relative_dir / name
+        if name in names or (name == "package.json") or relative.parts[:1] == ("patches",) or relative.parts[:2] == (".yarn", "patches"):
+            paths.append(relative)
+for relative in sorted(set(paths), key=lambda item: item.as_posix()):
+    sys.stdout.buffer.write(relative.as_posix().encode() + b"\0")
+    sys.stdout.buffer.write((root / relative).read_bytes() + b"\0")
+PY
 }
 
 install_node_dependencies() {

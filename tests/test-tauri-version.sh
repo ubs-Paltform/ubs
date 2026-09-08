@@ -32,6 +32,7 @@ cat > "$CONF" <<'JSON'
 {
   "productName": "fixture",
   "version": "1.0.0",
+  "metadata": { "bundleVersion": "do-not-touch" },
   "bundle": {
     "macOS": {
       "bundleVersion": "0.1.37",
@@ -66,6 +67,7 @@ PYEOF
 # 3) bundleVersion만 바뀌고 최상위 version과 중첩 version은 그대로
 set_tauri_bundle_version "$(next_bundle_version 0.1.37)"
 [ "$(conf_value bundle.macOS.bundleVersion)" = "0.1.38" ] || { echo "bundleVersion 상향 실패" >&2; exit 1; }
+[ "$(conf_value metadata.bundleVersion)" = "do-not-touch" ] || { echo "비표준 bundleVersion을 건드렸습니다." >&2; exit 1; }
 [ "$(conf_value version)" = "1.0.0" ] || { echo "bundleVersion 상향이 최상위 version을 건드렸습니다." >&2; exit 1; }
 [ "$(conf_value plugins.updater.version)" = "9.9.9" ] || { echo "중첩 version이 훼손됐습니다." >&2; exit 1; }
 

@@ -106,6 +106,39 @@ assert {item["options"]["package_manager"] for item in items} == {"pnpm"}
 assert len({item["options"]["execution_group"] for item in items}) == 1
 '
 
+# legacy Tauri Node cache도 workspace 하위 package.json과 manager config 변경을 해시에 포함한다.
+LEGACY_DIGEST_BEFORE="$(
+  cd "$FIXTURE/workspace"
+  # shellcheck source=../scripts/lib/node-package-manager.sh
+  source "$ROOT/scripts/lib/node-package-manager.sh"
+  NODE_PM=pnpm
+  node_dependency_digest | node_dependency_sha256
+)"
+printf '%s\n' '{"scripts":{"build":"node changed.js"}}' > "$FIXTURE/workspace/apps/a/package.json"
+LEGACY_DIGEST_AFTER="$(
+  cd "$FIXTURE/workspace"
+  # shellcheck source=../scripts/lib/node-package-manager.sh
+  source "$ROOT/scripts/lib/node-package-manager.sh"
+  NODE_PM=pnpm
+  node_dependency_digest | node_dependency_sha256
+)"
+[ "$LEGACY_DIGEST_BEFORE" != "$LEGACY_DIGEST_AFTER" ] || {
+  echo "legacy Node dependency hash가 workspace package.json 변경을 놓쳤습니다." >&2
+  exit 1
+}
+LEGACY_CONFIG_BEFORE="$LEGACY_DIGEST_AFTER"
+printf '%s\n' 'strict-peer-dependencies=false' > "$FIXTURE/workspace/.npmrc"
+LEGACY_CONFIG_AFTER="$(
+  cd "$FIXTURE/workspace"
+  source "$ROOT/scripts/lib/node-package-manager.sh"
+  NODE_PM=pnpm
+  node_dependency_digest | node_dependency_sha256
+)"
+[ "$LEGACY_CONFIG_BEFORE" != "$LEGACY_CONFIG_AFTER" ] || {
+  echo "legacy Node dependency hash가 manager config 변경을 놓쳤습니다." >&2
+  exit 1
+}
+
 # legacy Node wrapper는 복합 Tauri 프로젝트도 Node adapter로 강제한다.
 printf '%s\n' '{"scripts":{"build":"vite build"}}' > "$FIXTURE/tauri-mixed/package.json"
 printf '%s\n' '{"productName":"Mixed","version":"1.0.0"}' > "$FIXTURE/tauri-mixed/src-tauri/tauri.conf.json"

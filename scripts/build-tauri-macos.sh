@@ -61,6 +61,15 @@ VERSION_NAME="$CURRENT_VERSION"
 
 VERSION_CHANGED=false
 BUILD_COMPLETED=false
+VERSION_FILE_WAS_DIRTY=false
+
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1 && {
+  ! git ls-files --error-unmatch -- "$CONF" >/dev/null 2>&1 ||
+  ! git diff --quiet -- "$CONF" ||
+  ! git diff --cached --quiet -- "$CONF"
+}; then
+  VERSION_FILE_WAS_DIRTY=true
+fi
 
 set_tauri_version() {
   local version="$1"
@@ -99,15 +108,32 @@ BUNDLE_VERSION_CHANGED=false
 set_tauri_bundle_version() {
   local version="$1"
   python3 - "$CONF" "$version" <<'PYEOF'
-import re, sys
+import json, os, sys, tempfile
 path, new_version = sys.argv[1], sys.argv[2]
-content = open(path).read()
-content, count = re.subn(
-    r'("bundleVersion":\s*")[^"]+(")', rf'\g<1>{new_version}\g<2>', content, count=1
-)
-if count == 0:
-    sys.exit(f'"bundleVersion" key not found: {path}')
-open(path, "w").write(content)
+with open(path, encoding="utf-8") as source:
+    config = json.load(source)
+try:
+    current = config["bundle"]["macOS"]["bundleVersion"]
+except (KeyError, TypeError):
+    sys.exit(f'"bundle.macOS.bundleVersion" key not found: {path}')
+if not isinstance(current, str):
+    sys.exit(f'"bundle.macOS.bundleVersion" must be a string: {path}')
+config["bundle"]["macOS"]["bundleVersion"] = new_version
+directory = os.path.dirname(os.path.abspath(path))
+handle, temporary = tempfile.mkstemp(prefix=".tauri-conf-", suffix=".json", dir=directory)
+try:
+    with os.fdopen(handle, "w", encoding="utf-8") as output:
+        json.dump(config, output, ensure_ascii=False, indent=2)
+        output.write("\n")
+        output.flush()
+        os.fsync(output.fileno())
+    os.replace(temporary, path)
+except BaseException:
+    try:
+        os.unlink(temporary)
+    except FileNotFoundError:
+        pass
+    raise
 PYEOF
 }
 
@@ -396,11 +422,17 @@ BUILD_COMPLETED=true
 # 버전 변경 커밋 (안 하면 uncommitted diff로 계속 쌓임 — #26)
 # ==========================================
 
-if [ "$VERSION_CHANGED" = true ]; then
-  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+if [ "$VERSION_CHANGED" = true ] || [ "$BUNDLE_VERSION_CHANGED" = true ]; then
+  COMMIT_VERSION="$NEW_VERSION"
+  if [ "$BUNDLE_VERSION_CHANGED" = true ]; then
+    COMMIT_VERSION="${COMMIT_VERSION} (build ${NEW_BUNDLE_VERSION})"
+  fi
+  if [ "$VERSION_FILE_WAS_DIRTY" = true ]; then
+    echo -e "${YELLOW}⚠️  $(ubs_msg VERSION_COMMIT_SKIPPED_DIRTY "$CONF")${NC}" >&2
+  elif git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     git add -- "$CONF" 2>/dev/null
-    if git commit -m "chore: ${APP_NAME} 버전 ${NEW_VERSION}" -- "$CONF" >/dev/null 2>&1; then
-      echo -e "${GREEN}✅ $(ubs_msg VERSION_COMMIT_SUCCESS_APP "$APP_NAME" "$NEW_VERSION")${NC}"
+    if git commit -m "chore: ${APP_NAME} 버전 ${COMMIT_VERSION}" -- "$CONF" >/dev/null 2>&1; then
+      echo -e "${GREEN}✅ $(ubs_msg VERSION_COMMIT_SUCCESS_APP "$APP_NAME" "$COMMIT_VERSION")${NC}"
     else
       echo -e "${YELLOW}⚠️  $(ubs_msg VERSION_COMMIT_FAILED "$NEW_VERSION")${NC}" >&2
     fi

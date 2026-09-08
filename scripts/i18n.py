@@ -48,16 +48,10 @@ def _system_lang() -> str | None:
 
 
 def _detect_lang() -> str:
-    raw = (
-        os.environ.get("UBS_LANG")
-        or os.environ.get("LC_ALL")
-        or os.environ.get("LC_MESSAGES")
-        or os.environ.get("LANG")
-        or ""
-    )
-    code = _normalize(raw)
-    if code in _SUPPORTED:
-        return code
+    for name in ("UBS_LANG", "LC_ALL", "LC_MESSAGES", "LANG"):
+        code = _normalize(os.environ.get(name, ""))
+        if code in _SUPPORTED:
+            return code
     return _system_lang() or "en"
 
 
