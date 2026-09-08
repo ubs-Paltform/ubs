@@ -66,6 +66,7 @@ jobs:
           bash tests/test-i18n.sh
           bash tests/test-i18n-placeholders.sh
           bash tests/test-i18n-detect-lang.sh
+          bash tests/test-desktop-gui.sh
 
       - name: Validate Rust helper
         run: bash tests/test-rust-helper.sh
@@ -192,3 +193,21 @@ jobs:
 
       - name: Validate Python core behavior
         run: python tests/test_python_core.py
+
+  desktop-gui:
+    name: desktop GUI (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Select stable Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - name: Validate native desktop app
+        run: |
+          cargo fmt --manifest-path desktop/src-tauri/Cargo.toml --all -- --check
+          cargo test --manifest-path desktop/src-tauri/Cargo.toml --locked --all-targets
