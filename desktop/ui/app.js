@@ -10,6 +10,7 @@
   const projectStore = window.UBS_PROJECT_STORE;
   const projectsKey = "ubs.saved-projects.v1";
   const selectedProjectKey = "ubs.selected-project.v1";
+  const buildHistoryKey = "ubs.build-history.v1";
   const storage = (() => {
     try {
       return window.localStorage;
@@ -19,6 +20,7 @@
   })();
   const projects = [];
   const savedProjects = projectStore.load(storage, projectsKey);
+  const buildHistory = projectStore.loadHistory(storage, buildHistoryKey);
   const logLines = [];
   let selectedProject = null;
   let running = false;
@@ -32,11 +34,17 @@
     projectChoice: document.querySelector("#project-choice"),
     projectList: document.querySelector("#project-list"),
     projectState: document.querySelector("#project-state"),
-    savedProjects: document.querySelector("#saved-projects"),
-    savedCount: document.querySelector("#saved-count"),
-    savedEmpty: document.querySelector("#saved-empty"),
+    currentProject: document.querySelector("#current-project"),
+    currentProjectName: document.querySelector("#current-project-name"),
+    currentProjectSymbol: document.querySelector("#current-project-symbol"),
+    currentProjectType: document.querySelector("#current-project-type"),
+    removeCurrentProject: document.querySelector("#remove-current-project"),
+    buildHistory: document.querySelector("#build-history"),
+    historyCount: document.querySelector("#history-count"),
+    historyEmpty: document.querySelector("#history-empty"),
     versionBumps: [...document.querySelectorAll('input[name="version-bump"]')],
     jobs: [...document.querySelectorAll('input[name="jobs"]')],
+    jobsCard: document.querySelector("#jobs-card"),
     cleanBuild: document.querySelector("#clean-build"),
     outputFieldset: document.querySelector("#output-fieldset"),
     outputHint: document.querySelector("#output-hint"),
@@ -100,103 +108,161 @@
     return type.slice(0, 2).toUpperCase();
   }
 
-  function rememberProjects(detected) {
-    savedProjects.splice(0, savedProjects.length, ...projectStore.merge(detected, savedProjects));
-    projectStore.save(storage, projectsKey, savedProjects);
-    renderSavedProjects();
+  function historyStatus(status) {
+    const keys = {
+      success: "historySuccess",
+      failed: "historyFailed",
+      cancelled: "historyCancelled"
+    };
+    return text(keys[status] || "historyFailed");
   }
 
-  function renderSavedProjects() {
-    elements.savedProjects.replaceChildren();
-    elements.savedCount.textContent = String(savedProjects.length);
-    elements.savedEmpty.hidden = savedProjects.length > 0;
-    savedProjects.forEach((project, index) => {
-      const row = document.createElement("div");
-      row.className = "saved-project";
-      row.classList.toggle("active", selectedProject?.path === project.path);
+  function settingsSummary(settings, type) {
+    const normalized = projectStore.normalizeSettings(settings);
+    const versionKeys = {
+      none: "versionNone",
+      build: "versionBuild",
+      patch: "versionPatch",
+      minor: "versionMinor",
+      major: "versionMajor"
+    };
+    const outputs = normalized.outputs[0] === "auto"
+      ? text("outputAuto")
+      : normalized.outputs.map((output) => output.toUpperCase()).join("+");
+    return [
+      text(versionKeys[normalized.versionBump]),
+      text(normalized.jobs === 1 ? "jobsSequential" : "jobsParallel"),
+      normalized.clean ? text("cleanLabel") : null,
+      type === "flutter" ? outputs : null
+    ].filter(Boolean).join(" · ");
+  }
 
-      const select = document.createElement("button");
-      select.type = "button";
-      select.className = "saved-project-main";
-      select.dataset.action = "select";
-      select.dataset.index = String(index);
-      select.setAttribute("aria-pressed", String(selectedProject?.path === project.path));
+  function renderHistory() {
+    elements.buildHistory.replaceChildren();
+    elements.historyCount.textContent = String(buildHistory.length);
+    elements.historyEmpty.hidden = buildHistory.length > 0;
+    buildHistory.forEach((record, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "history-item";
+      button.dataset.index = String(index);
+      button.dataset.status = record.status;
+      button.classList.toggle("active", selectedProject?.path === record.path);
+      button.setAttribute("aria-label", `${projectName(record.path)} · ${settingsSummary(record.settings, record.type)}`);
+      if (record.builtAt) button.title = `${record.path}\n${record.builtAt}`;
 
-      const symbol = document.createElement("span");
-      symbol.className = "project-symbol";
-      symbol.textContent = projectSymbol(project.type);
-      const copy = document.createElement("span");
-      copy.className = "saved-project-copy";
+      const title = document.createElement("span");
+      title.className = "history-title";
       const name = document.createElement("strong");
-      name.textContent = projectName(project.path);
-      const path = document.createElement("code");
-      path.textContent = project.path;
-      copy.append(name, path);
-      const type = document.createElement("span");
-      type.className = "saved-project-type";
-      type.textContent = project.type;
-      select.append(symbol, copy, type);
+      name.textContent = projectName(record.path);
+      const status = document.createElement("span");
+      status.className = "history-status";
+      status.textContent = historyStatus(record.status);
+      title.append(name, status);
 
-      const build = document.createElement("button");
-      build.type = "button";
-      build.className = "quick-build-button";
-      build.dataset.action = "build";
-      build.dataset.index = String(index);
-      build.textContent = text("quickBuild");
-      build.setAttribute("aria-label", `${text("quickBuild")} · ${projectName(project.path)}`);
-
-      const remove = document.createElement("button");
-      remove.type = "button";
-      remove.className = "remove-project-button";
-      remove.dataset.action = "remove";
-      remove.dataset.index = String(index);
-      remove.setAttribute("aria-label", text("removeProject", { name: projectName(project.path) }));
-      remove.textContent = "×";
-      row.append(select, build, remove);
-      elements.savedProjects.append(row);
+      const summary = document.createElement("span");
+      summary.className = "history-summary";
+      summary.textContent = settingsSummary(record.settings, record.type);
+      button.append(title, summary);
+      elements.buildHistory.append(button);
     });
+  }
+
+  function rememberBuild(project, settings, status) {
+    const next = projectStore.rememberBuild(buildHistory, project, settings, status);
+    buildHistory.splice(0, buildHistory.length, ...next);
+    projectStore.saveHistory(storage, buildHistoryKey, buildHistory);
+    renderHistory();
+  }
+
+  function saveCurrentProject(project) {
+    savedProjects.splice(0, savedProjects.length, ...(project ? [project] : []));
+    projectStore.save(storage, projectsKey, savedProjects);
   }
 
   function applySelectedProject() {
     const isFlutter = selectedProject?.type === "flutter";
+    elements.chooseFolder.hidden = Boolean(selectedProject);
+    elements.currentProject.hidden = !selectedProject;
     elements.projectBadge.textContent = selectedProject?.type || text("notDetected");
     elements.projectBadge.classList.toggle("detected", Boolean(selectedProject));
-    elements.projectPath.textContent = selectedProject?.path || text("chooseHint");
+    elements.currentProjectName.textContent = selectedProject ? projectName(selectedProject.path) : "";
+    elements.currentProjectSymbol.textContent = selectedProject ? projectSymbol(selectedProject.type) : "--";
+    elements.currentProjectType.textContent = selectedProject?.type || "";
+    elements.projectPath.textContent = selectedProject?.path || "";
+    if (selectedProject) {
+      elements.removeCurrentProject.setAttribute("aria-label", text("removeProject", {
+        name: projectName(selectedProject.path)
+      }));
+    }
     elements.outputFieldset.disabled = running || !isFlutter;
     elements.outputHint.textContent = text(isFlutter ? "outputsReady" : "outputsUnavailable");
     elements.startBuild.disabled = running || !selectedProject;
     projectStore.saveSelectedPath(storage, selectedProjectKey, selectedProject?.path);
-    renderSavedProjects();
+    syncBuildModeVisibility();
+    renderHistory();
     if (selectedProject) setPipeline("validate");
     else setPipeline(null);
   }
 
-  function selectSavedProject(project, announce = true) {
+  function selectProject(project, announce = true, closeChoice = true) {
     selectedProject = project;
-    elements.projectChoice.hidden = true;
+    if (closeChoice) elements.projectChoice.hidden = true;
+    saveCurrentProject(project);
+    applyBuildSettings(projectStore.latestSettings(buildHistory, project.path));
     applySelectedProject();
     if (announce) setProjectState(text("projectSelected", { name: projectName(project.path) }), "success");
   }
 
-  function removeSavedProject(index) {
-    const [removed] = savedProjects.splice(index, 1);
-    if (!removed) return;
-    projectStore.save(storage, projectsKey, savedProjects);
-    if (selectedProject?.path === removed.path) {
-      selectedProject = savedProjects[0] || null;
-    }
+  function removeCurrentProject() {
+    if (!selectedProject || running) return;
+    const removed = selectedProject;
+    selectedProject = null;
+    projects.splice(0);
+    elements.projectChoice.hidden = true;
+    saveCurrentProject(null);
+    applyBuildSettings(projectStore.normalizeSettings());
     applySelectedProject();
     setProjectState(text("projectRemoved", { name: projectName(removed.path) }), "success");
   }
 
-  function selectedOutputs() {
-    return elements.outputChecks
-      .filter((input) => input.checked && input.value !== "auto")
-      .map((input) => input.value);
-  }
-
   function selectedValue(inputs) {
     return inputs.find((input) => input.checked)?.value;
+  }
+
+  function currentBuildSettings() {
+    return projectStore.normalizeSettings({
+      versionBump: selectedValue(elements.versionBumps),
+      jobs: Number(selectedValue(elements.jobs)),
+      clean: elements.cleanBuild.checked,
+      outputs: elements.outputChecks.filter((input) => input.checked).map((input) => input.value)
+    });
+  }
+
+  function applyBuildSettings(settings) {
+    const normalized = projectStore.normalizeSettings(settings);
+    elements.versionBumps.forEach((input) => {
+      input.checked = input.value === normalized.versionBump;
+    });
+    elements.jobs.forEach((input) => {
+      input.checked = Number(input.value) === normalized.jobs;
+    });
+    elements.cleanBuild.checked = normalized.clean;
+    elements.outputChecks.forEach((input) => {
+      input.checked = normalized.outputs.includes(input.value);
+    });
+    syncBuildModeVisibility();
+  }
+
+  function syncBuildModeVisibility() {
+    const outputCount = elements.outputChecks.filter((input) => input.checked && input.value !== "auto").length;
+    const showBuildMode = selectedProject?.type === "flutter" && outputCount >= 2;
+    elements.jobsCard.hidden = !showBuildMode;
+    if (!showBuildMode) {
+      elements.jobs.forEach((input) => {
+        input.checked = input.value === "1";
+      });
+    }
   }
 
   function syncOutputChecks(changed) {
@@ -208,11 +274,12 @@
       auto.checked = false;
     }
     if (!elements.outputChecks.some((input) => input.checked)) auto.checked = true;
+    syncBuildModeVisibility();
   }
 
   function syncProject() {
-    selectedProject = projects[Number(elements.projectList.value)] || null;
-    applySelectedProject();
+    const project = projects[Number(elements.projectList.value)] || null;
+    if (project) selectProject(project, false, false);
   }
 
   async function chooseFolder() {
@@ -240,7 +307,8 @@
       projects.splice(0);
       selectedProject = null;
       elements.projectChoice.hidden = true;
-      elements.startBuild.disabled = true;
+      saveCurrentProject(null);
+      applySelectedProject();
       setPipeline("detect", true);
       setProjectState(text("detectFailed"), "error");
     }
@@ -262,7 +330,6 @@
       setPipeline("detect", true);
       return;
     }
-    rememberProjects(projects);
     elements.projectChoice.hidden = projects.length === 1;
     elements.projectList.value = "0";
     setProjectState(
@@ -298,7 +365,8 @@
     });
     elements.cleanBuild.disabled = value;
     elements.projectList.disabled = value;
-    elements.savedProjects.querySelectorAll("button").forEach((button) => {
+    elements.removeCurrentProject.disabled = value;
+    elements.buildHistory.querySelectorAll("button").forEach((button) => {
       button.disabled = value;
     });
     elements.outputFieldset.disabled = value || selectedProject?.type !== "flutter";
@@ -343,6 +411,9 @@
 
   async function startBuild() {
     if (!invoke || !selectedProject || running) return;
+    const project = { ...selectedProject };
+    const settings = currentBuildSettings();
+    let historyResult = "failed";
     logLines.splice(0);
     elements.buildLog.textContent = "";
     elements.buildResult.replaceChildren();
@@ -354,11 +425,11 @@
     try {
       const result = await invoke("run_build", {
         request: {
-          project: selectedProject.path,
-          versionBump: selectedValue(elements.versionBumps),
-          outputs: selectedProject.type === "flutter" ? selectedOutputs() : [],
-          jobs: Number(selectedValue(elements.jobs)),
-          clean: elements.cleanBuild.checked,
+          project: project.path,
+          versionBump: settings.versionBump,
+          outputs: project.type === "flutter" ? settings.outputs.filter((output) => output !== "auto") : [],
+          jobs: settings.jobs,
+          clean: settings.clean,
           locale
         }
       });
@@ -367,6 +438,7 @@
         if (fallback) elements.buildLog.textContent = fallback;
       }
       renderResult(result);
+      historyResult = result.cancelled ? "cancelled" : result.success ? "success" : "failed";
       if (result.success) {
         elements.runStatus.textContent = text("succeeded");
         elements.runStatus.className = "run-status success";
@@ -384,6 +456,7 @@
       appendLog({ stream: "stderr", line: text("buildError") });
     } finally {
       setRunning(false);
+      rememberBuild(project, settings, historyResult);
     }
   }
 
@@ -401,27 +474,22 @@
   async function initialize() {
     applyLocale();
     setPipeline(null);
-    renderSavedProjects();
+    renderHistory();
     const restoredPath = projectStore.selectedPath(storage, selectedProjectKey);
     const restored = savedProjects.find((project) => project.path === restoredPath) || savedProjects[0];
     if (restored) {
-      selectSavedProject(restored, false);
-      setProjectState(text("restoredProjects", { count: savedProjects.length }), "success");
+      selectProject(restored, false);
+      setProjectState(text("projectSelected", { name: projectName(restored.path) }), "success");
     }
     elements.chooseFolder.addEventListener("click", chooseFolder);
+    elements.removeCurrentProject.addEventListener("click", removeCurrentProject);
     elements.projectList.addEventListener("change", syncProject);
-    elements.savedProjects.addEventListener("click", async (event) => {
-      const button = event.target.closest("button[data-action]");
+    elements.buildHistory.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-index]");
       if (!button || running) return;
-      const index = Number(button.dataset.index);
-      const project = savedProjects[index];
-      if (!project) return;
-      if (button.dataset.action === "remove") {
-        removeSavedProject(index);
-        return;
-      }
-      selectSavedProject(project);
-      if (button.dataset.action === "build") await startBuild();
+      const record = buildHistory[Number(button.dataset.index)];
+      if (!record) return;
+      selectProject({ path: record.path, type: record.type });
     });
     elements.outputChecks.forEach((input) => {
       input.addEventListener("change", () => syncOutputChecks(input));
