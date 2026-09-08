@@ -86,6 +86,9 @@ assert icon[24] == 8 and icon[25] == 6, "Tauri requires an 8-bit RGBA icon"
 config = json.loads((root / "src-tauri/tauri.conf.json").read_text(encoding="utf-8"))
 assert config["build"]["frontendDist"] == "../ui"
 assert config["app"]["withGlobalTauri"] is True
+main_window = config["app"]["windows"][0]
+assert (main_window["width"], main_window["height"]) == (1482, 986)
+assert (main_window["minWidth"], main_window["minHeight"]) == (860, 620)
 csp = config["app"]["security"]["csp"]
 assert "unsafe-inline" not in json.dumps(csp)
 assert "unsafe-eval" not in json.dumps(csp)

@@ -38,6 +38,7 @@ Alternatives considered:
 - Finite option groups with five or fewer choices stay visible as segmented buttons instead of dropdowns.
 - Pipeline states use text, shape, and color together.
 - Wide windows keep controls on the left and a sticky, full-height build log on the right; narrow windows stack both in one column.
+- The macOS window opens at 1482 × 986 content pixels, matching the 1482 × 1021 reference including the title bar; it remains resizable down to 860 × 620.
 - The build log remains visible before execution, preserves live output and artifacts, and exposes a localized copy action with accessible success or failure feedback.
 - Every reported artifact keeps its exact path visible and provides a direct Finder action.
 - Motion is limited to active progress and short hover transitions; `prefers-reduced-motion` disables it.
