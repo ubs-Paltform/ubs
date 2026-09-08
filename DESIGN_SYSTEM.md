@@ -31,7 +31,9 @@ Alternatives considered:
 - One cyan primary action per screen.
 - The utility view opens on project controls without a marketing headline.
 - Folder selection always precedes option editing and build execution.
-- Saved project rows persist locally and pair one compact build action with one removable folder target.
+- The project slot shows either one add action or the current removable project, never a duplicate project library.
+- Sidebar history keeps one latest build per project and restores its exact build controls when selected.
+- Sequential/parallel controls appear only when two or more Flutter outputs are selected.
 - Finite option groups with five or fewer choices stay visible as segmented buttons instead of dropdowns.
 - Pipeline states use text, shape, and color together.
 - Motion is limited to active progress and short hover transitions; `prefers-reduced-motion` disables it.
