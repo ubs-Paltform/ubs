@@ -27,6 +27,15 @@
           </div>
         </div>
 
+        <div class="history-section">
+          <div class="history-heading">
+            <p class="side-label" data-i18n="recentBuilds">Recent builds</p>
+            <span id="history-count">0</span>
+          </div>
+          <div id="build-history" class="build-history"></div>
+          <p id="history-empty" class="history-empty" data-i18n="historyEmpty">No builds yet.</p>
+        </div>
+
         <div class="side-meta">
           <div class="safety-row">
             <span class="safety-pulse" aria-hidden="true"></span>
@@ -55,20 +64,23 @@
           </div>
 
           <button id="choose-folder" class="project-picker" type="button">
-            <span class="folder-icon" aria-hidden="true"></span>
+            <span class="add-project-icon" aria-hidden="true">+</span>
             <span class="project-copy">
               <strong data-i18n="chooseFolder">Choose project folder</strong>
-              <small id="project-path" data-i18n="chooseHint">A project or monorepo root</small>
+              <small data-i18n="chooseHint">A project or monorepo root</small>
             </span>
             <span class="picker-action" data-i18n="browse">Browse</span>
           </button>
 
-          <div class="project-library-heading">
-            <strong data-i18n="savedProjects">Saved projects</strong>
-            <span id="saved-count">0</span>
+          <div id="current-project" class="current-project" hidden>
+            <span id="current-project-symbol" class="project-symbol">--</span>
+            <span class="current-project-copy">
+              <strong id="current-project-name"></strong>
+              <code id="project-path"></code>
+            </span>
+            <span id="current-project-type" class="current-project-type"></span>
+            <button id="remove-current-project" class="remove-project-button" type="button" aria-label="Remove project">×</button>
           </div>
-          <div id="saved-projects" class="project-library"></div>
-          <p id="saved-empty" class="project-empty" data-i18n="savedEmpty">Add a folder once and it stays here for the next launch.</p>
 
           <div id="project-choice" class="project-choice" hidden>
             <label for="project-list" data-i18n="detectedProject">Detected project</label>
@@ -98,7 +110,7 @@
               </div>
             </fieldset>
 
-            <fieldset class="option-card choice-card jobs-card">
+            <fieldset id="jobs-card" class="option-card choice-card jobs-card" hidden>
               <legend data-i18n="jobsLabel">Build mode</legend>
               <div class="segmented-options">
                 <label class="choice-option"><input type="radio" name="jobs" value="1"><span data-i18n="jobsSequential">Sequential build</span></label>

@@ -244,9 +244,12 @@ fi
 PARALLEL_BUILD=false
 PARALLEL_PREFS_FILE="$SCRIPT_DIR/.build_prefs"
 
-if [ "$BUILD_IOS" = true ] && [ "$BUILD_ANDROID" = true ] && \
-   [ "${UBS_NON_INTERACTIVE:-false}" != "true" ]; then
-  if [ -f "$PARALLEL_PREFS_FILE" ]; then
+if [ "$BUILD_IOS" = true ] && { [ "$BUILD_ANDROID" = true ] || [ "$BUILD_APK" = true ]; }; then
+  if [ "${UBS_NON_INTERACTIVE:-false}" = "true" ]; then
+    if [ "${UBS_FLUTTER_PARALLEL:-false}" = "true" ]; then
+      PARALLEL_BUILD=true
+    fi
+  elif [ -f "$PARALLEL_PREFS_FILE" ]; then
     source "$PARALLEL_PREFS_FILE"
     if [ "$PARALLEL_BUILD" = true ]; then
       echo -e "${CYAN}$(ubs_msg PARALLEL_PREF_SAVED_PARALLEL)${NC} $(ubs_msg PARALLEL_PREF_CHANGE_HINT "$PARALLEL_PREFS_FILE")"
@@ -397,9 +400,15 @@ build_macos() {
     -exportOptionsPlist "$export_options"
 }
 
-if [ "$PARALLEL_BUILD" = true ] && [ "$BUILD_ANDROID" = true ] && [ "$BUILD_IOS" = true ]; then
+build_android_outputs() {
+  [ "$BUILD_ANDROID" = true ] && build_android
+  [ "$BUILD_APK" = true ] && build_apk
+}
+
+if [ "$PARALLEL_BUILD" = true ] && [ "$BUILD_IOS" = true ] && \
+   { [ "$BUILD_ANDROID" = true ] || [ "$BUILD_APK" = true ]; }; then
   echo -e "${BLUE}⏱️  $(ubs_msg PARALLEL_BUILD_START)${NC}"
-  build_android &
+  build_android_outputs &
   ANDROID_PID=$!
   build_ios &
   IOS_PID=$!
@@ -414,8 +423,8 @@ if [ "$PARALLEL_BUILD" = true ] && [ "$BUILD_ANDROID" = true ] && [ "$BUILD_IOS"
 else
   [ "$BUILD_ANDROID" = true ] && build_android
   [ "$BUILD_IOS" = true ] && build_ios
+  [ "$BUILD_APK" = true ] && build_apk
 fi
-[ "$BUILD_APK" = true ] && build_apk
 [ "$BUILD_WEB" = true ] && build_web
 [ "$BUILD_MACOS" = true ] && build_macos
 BUILD_COMPLETED=true

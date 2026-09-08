@@ -51,6 +51,26 @@ store.saveSelectedPath(storage, "selected", "/new");
 if (store.selectedPath(storage, "selected") !== "/new") throw new Error("selection restore contract failed");
 values.set("projects", "{");
 if (store.load(storage, "projects").length !== 0) throw new Error("corrupt storage contract failed");
+
+const safe = store.normalizeSettings({ versionBump: "bogus", jobs: 8, clean: "yes", outputs: ["auto", "apk", "apk", "bad"] });
+if (JSON.stringify(safe) !== JSON.stringify({
+  versionBump: "none", jobs: 0, clean: false, outputs: ["apk"]
+})) throw new Error("settings normalization contract failed");
+const flutter = { path: "/apps/canary", type: "flutter" };
+let history = store.rememberBuild([], flutter, {
+  versionBump: "patch", jobs: 1, clean: true, outputs: ["appbundle", "web"]
+}, "success", "2026-09-08T01:00:00.000Z");
+history = store.rememberBuild(history, flutter, {
+  versionBump: "build", jobs: 0, clean: false, outputs: ["ipa"]
+}, "failed", "2026-09-08T02:00:00.000Z");
+if (history.length !== 1 || history[0].status !== "failed") throw new Error("latest history contract failed");
+if (JSON.stringify(store.latestSettings(history, flutter.path)) !== JSON.stringify({
+  versionBump: "build", jobs: 0, clean: false, outputs: ["ipa"]
+})) throw new Error("history settings restore contract failed");
+store.saveHistory(storage, "history", history);
+if (JSON.stringify(store.loadHistory(storage, "history")) !== JSON.stringify(history)) throw new Error("history persistence contract failed");
+values.set("history", "{");
+if (store.loadHistory(storage, "history").length !== 0) throw new Error("corrupt history contract failed");
 NODE
 
 python3 <<'PY'
@@ -106,8 +126,16 @@ assert 'data-i18n="jobsParallel"' in html
 assert '<h1' not in html
 for removed_header_key in ('data-i18n="eyebrow"', 'data-i18n="title"', 'data-i18n="subtitle"'):
     assert removed_header_key not in html
-for project_library_contract in ('id="saved-projects"', 'id="saved-count"', 'id="saved-empty"'):
-    assert project_library_contract in html
+for current_project_contract in (
+    'id="choose-folder"', 'id="current-project"', 'id="current-project-name"',
+    'id="current-project-type"', 'id="remove-current-project"'
+):
+    assert current_project_contract in html
+for removed_library_contract in ('id="saved-projects"', 'id="saved-count"', 'id="saved-empty"'):
+    assert removed_library_contract not in html
+assert 'id="jobs-card" class="option-card choice-card jobs-card" hidden' in html
+for history_contract in ('id="build-history"', 'id="history-count"', 'id="history-empty"'):
+    assert history_contract in html
 
 frontend = "\n".join(path.read_text(encoding="utf-8") for path in (root / "ui").iterdir())
 assert "https://" not in frontend and "http://" not in frontend
@@ -117,7 +145,9 @@ for guardrail in ('"--non-interactive"', '"--no-publish"', "slot.active", "termi
     assert guardrail in rust
 
 app = (root / "ui/app.js").read_text(encoding="utf-8")
-for saved_project_contract in ("projectStore", "rememberProjects", "selectSavedProject", "quickBuild", "canonical_directory"):
-    assert saved_project_contract in app or saved_project_contract in rust
+for app_contract in ("projectStore", "saveCurrentProject", "syncBuildModeVisibility", "outputCount >= 2", "canonical_directory"):
+    assert app_contract in app or app_contract in rust
+for live_log_contract in ('"--verbose"', '"PYTHONUNBUFFERED"', '"UBS_FLUTTER_PARALLEL"'):
+    assert live_log_contract in rust
 print("desktop GUI contract valid")
 PY
