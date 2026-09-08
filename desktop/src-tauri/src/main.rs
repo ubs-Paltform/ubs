@@ -176,10 +176,12 @@ fn canonical_artifact_path(raw: &str) -> Result<(PathBuf, bool), String> {
 #[cfg(target_os = "macos")]
 fn finder_command(path: &Path, is_file: bool) -> Command {
     let mut command = Command::new("/usr/bin/open");
-    if is_file {
-        command.arg("-R");
-    }
-    command.arg(path);
+    let folder = if is_file {
+        path.parent().unwrap_or(path)
+    } else {
+        path
+    };
+    command.arg(folder);
     command
 }
 
@@ -657,13 +659,13 @@ mod tests {
 
     #[cfg(target_os = "macos")]
     #[test]
-    fn finder_reveals_files_and_opens_directories_with_argv() {
+    fn finder_opens_artifact_folders_with_argv() {
         let file = Path::new("/tmp/output artifact.apk");
         let file_command = finder_command(file, true);
         assert_eq!(file_command.get_program(), "/usr/bin/open");
         assert_eq!(
             file_command.get_args().collect::<Vec<_>>(),
-            vec![std::ffi::OsStr::new("-R"), file.as_os_str()]
+            vec![Path::new("/tmp").as_os_str()]
         );
 
         let directory = Path::new("/tmp/output folder");
