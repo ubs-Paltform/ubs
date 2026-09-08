@@ -77,4 +77,17 @@ set_tauri_version "1.1.0"
 [ "$(conf_value bundle.macOS.bundleVersion)" = "0.1.38" ] || { echo "version 상향이 bundleVersion을 건드렸습니다." >&2; exit 1; }
 [ "$(conf_value plugins.updater.version)" = "9.9.9" ] || { echo "version 상향이 중첩 version을 건드렸습니다." >&2; exit 1; }
 
+# 5) bundleVersion이 없으면 생성 가능
+python3 - "$CONF" <<'PY'
+import json, sys
+path = sys.argv[1]
+config = json.load(open(path, encoding="utf-8"))
+config["bundle"]["macOS"].pop("bundleVersion")
+with open(path, "w", encoding="utf-8") as output:
+    json.dump(config, output, indent=2)
+    output.write("\n")
+PY
+set_tauri_bundle_version "1.1.1"
+[ "$(conf_value bundle.macOS.bundleVersion)" = "1.1.1" ] || { echo "bundleVersion 생성 실패" >&2; exit 1; }
+
 echo "test-tauri-version: ok"
