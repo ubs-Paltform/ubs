@@ -56,6 +56,9 @@ const safe = store.normalizeSettings({ versionBump: "bogus", jobs: 8, clean: "ye
 if (JSON.stringify(safe) !== JSON.stringify({
   versionBump: "none", jobs: 0, clean: false, outputs: ["apk"]
 })) throw new Error("settings normalization contract failed");
+if (JSON.stringify(store.normalizeSettings().outputs) !== JSON.stringify(["appbundle", "ipa"])) {
+  throw new Error("Flutter default outputs contract failed");
+}
 const flutter = { path: "/apps/canary", type: "flutter" };
 let history = store.rememberBuild([], flutter, {
   versionBump: "patch", jobs: 1, clean: true, outputs: ["appbundle", "web"]
@@ -86,6 +89,9 @@ assert icon[24] == 8 and icon[25] == 6, "Tauri requires an 8-bit RGBA icon"
 config = json.loads((root / "src-tauri/tauri.conf.json").read_text(encoding="utf-8"))
 assert config["build"]["frontendDist"] == "../ui"
 assert config["app"]["withGlobalTauri"] is True
+main_window = config["app"]["windows"][0]
+assert (main_window["width"], main_window["height"]) == (1482, 986)
+assert (main_window["minWidth"], main_window["minHeight"]) == (860, 620)
 csp = config["app"]["security"]["csp"]
 assert "unsafe-inline" not in json.dumps(csp)
 assert "unsafe-eval" not in json.dumps(csp)
@@ -121,6 +127,11 @@ assert html.count('name="version-bump"') == 5
 assert html.count('name="jobs"') == 2
 assert html.count('name="version-bump" value="none" checked') == 1
 assert html.count('name="jobs" value="0" checked') == 1
+assert 'value="auto"' not in html
+assert html.count('value="appbundle" checked') == 1
+assert html.count('value="ipa" checked') == 1
+assert 'class="brand"' not in html
+assert html.index('class="side-meta"') < html.index('id="locale-name"') < html.index('</aside>')
 assert 'data-i18n="jobsSequential"' in html
 assert 'data-i18n="jobsParallel"' in html
 assert '<h1' not in html
@@ -144,11 +155,12 @@ for log_layout_contract in (
 ):
     assert log_layout_contract in html
 assert 'id="console-panel" class="console-panel" aria-labelledby="console-heading" hidden' not in html
+assert html.index('id="start-build"') < html.index('id="build-result"') < html.index('id="console-panel"')
 
 styles = (root / "ui/styles.css").read_text(encoding="utf-8")
 for responsive_log_contract in (
     '.workbench {', '.console-panel {\n  position: sticky;', '@media (max-width: 1220px)',
-    'grid-template-columns: 1fr;'
+    'grid-template-columns: 1fr;', '.run-command-stack {'
 ):
     assert responsive_log_contract in styles
 
@@ -162,6 +174,7 @@ for guardrail in ('"--non-interactive"', '"--no-publish"', "slot.active", "termi
 app = (root / "ui/app.js").read_text(encoding="utf-8")
 for app_contract in ("projectStore", "saveCurrentProject", "syncBuildModeVisibility", "outputCount >= 2", "canonical_directory"):
     assert app_contract in app or app_contract in rust
+assert 'output !== "auto"' not in app
 for copy_log_contract in ('navigator.clipboard?.writeText', 'document.execCommand("copy")', 'copyBuildLog', 'logCopyFailed'):
     assert copy_log_contract in app
 for artifact_folder_contract in ('invoke("open_artifact_location", { path })', 'artifact-open-button', 'openFolderFailed'):

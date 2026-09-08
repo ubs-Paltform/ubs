@@ -10,7 +10,7 @@ function normalizeSettings(settings) {
     versionBump: versionBumps.has(settings?.versionBump) ? settings.versionBump : "none",
     jobs: settings?.jobs === 1 ? 1 : 0,
     clean: settings?.clean === true,
-    outputs: explicitOutputs.length > 0 ? explicitOutputs : ["auto"]
+    outputs: explicitOutputs.length > 0 ? explicitOutputs : ["appbundle", "ipa"]
   };
 }
 
