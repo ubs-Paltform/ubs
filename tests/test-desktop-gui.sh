@@ -98,9 +98,14 @@ assert parser.inline_styles == 0
 assert '<select id="version-bump">' not in html
 assert '<select id="jobs">' not in html
 assert html.count('name="version-bump"') == 5
-assert html.count('name="jobs"') == 5
+assert html.count('name="jobs"') == 2
 assert html.count('name="version-bump" value="none" checked') == 1
 assert html.count('name="jobs" value="0" checked') == 1
+assert 'data-i18n="jobsSequential"' in html
+assert 'data-i18n="jobsParallel"' in html
+assert '<h1' not in html
+for removed_header_key in ('data-i18n="eyebrow"', 'data-i18n="title"', 'data-i18n="subtitle"'):
+    assert removed_header_key not in html
 for project_library_contract in ('id="saved-projects"', 'id="saved-count"', 'id="saved-empty"'):
     assert project_library_contract in html
 
