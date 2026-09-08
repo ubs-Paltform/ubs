@@ -138,6 +138,19 @@ assert 'class="execution-grid"' in html
 assert html.index('name="version-bump"') < html.index('id="output-fieldset"') < html.index('id="jobs-card"') < html.index('id="clean-build"')
 for history_contract in ('id="build-history"', 'id="history-count"', 'id="history-empty"'):
     assert history_contract in html
+for log_layout_contract in (
+    'class="workbench"', 'class="controls-column"', 'id="console-panel"',
+    'id="copy-log"', 'id="copy-log-status"', 'aria-controls="build-log"'
+):
+    assert log_layout_contract in html
+assert 'id="console-panel" class="console-panel" aria-labelledby="console-heading" hidden' not in html
+
+styles = (root / "ui/styles.css").read_text(encoding="utf-8")
+for responsive_log_contract in (
+    '.workbench {', '.console-panel {\n  position: sticky;', '@media (max-width: 1220px)',
+    'grid-template-columns: 1fr;'
+):
+    assert responsive_log_contract in styles
 
 frontend = "\n".join(path.read_text(encoding="utf-8") for path in (root / "ui").iterdir())
 assert "https://" not in frontend and "http://" not in frontend
@@ -149,6 +162,8 @@ for guardrail in ('"--non-interactive"', '"--no-publish"', "slot.active", "termi
 app = (root / "ui/app.js").read_text(encoding="utf-8")
 for app_contract in ("projectStore", "saveCurrentProject", "syncBuildModeVisibility", "outputCount >= 2", "canonical_directory"):
     assert app_contract in app or app_contract in rust
+for copy_log_contract in ('navigator.clipboard?.writeText', 'document.execCommand("copy")', 'copyBuildLog', 'logCopyFailed'):
+    assert copy_log_contract in app
 for live_log_contract in ('"--verbose"', '"PYTHONUNBUFFERED"', '"UBS_FLUTTER_PARALLEL"'):
     assert live_log_contract in rust
 print("desktop GUI contract valid")

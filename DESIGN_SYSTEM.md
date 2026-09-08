@@ -37,6 +37,8 @@ Alternatives considered:
 - Sequential/parallel controls appear only when two or more Flutter outputs are selected.
 - Finite option groups with five or fewer choices stay visible as segmented buttons instead of dropdowns.
 - Pipeline states use text, shape, and color together.
+- Wide windows keep controls on the left and a sticky, full-height build log on the right; narrow windows stack both in one column.
+- The build log remains visible before execution, preserves live output and artifacts, and exposes a localized copy action with accessible success or failure feedback.
 - Motion is limited to active progress and short hover transitions; `prefers-reduced-motion` disables it.
 - The operating-system language selects `ko`, `en`, `ja`, or `zh`; all other languages fall back to English.
 - Keyboard focus remains visible. Logs use a live region and never inject HTML.
