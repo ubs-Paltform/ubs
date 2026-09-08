@@ -1049,6 +1049,13 @@ ARTIFACT_PATTERNS = {
     "ios-xcode": ["build/ubs/*.xcarchive", "build/ubs/export/*.ipa"],
     "godot": ["build/ios/*.ipa", "build/android/*.apk", "build/android/*.aab", "build/web", "build/macos/*.zip", "build/linux/*", "build/windows/*"],
 }
+FLUTTER_ARTIFACT_PATTERNS = {
+    "appbundle": ("build/app/outputs/bundle/release/*.aab",),
+    "apk": ("build/app/outputs/flutter-apk/*.apk",),
+    "ipa": ("build/ios/ipa/*.ipa",),
+    "web": ("build/web",),
+    "pkg": ("build/macos/export/*.pkg",),
+}
 DIRECTORY_PATTERNS = {
     "build/web", "dist", "build", ".next", "src-tauri/target/release/bundle/*/*",
     "build/ubs/*.xcarchive",
@@ -1069,34 +1076,32 @@ TAURI_TARGET_BUNDLE_PATTERNS = [
 DIRECTORY_PATTERNS.update(TAURI_TARGET_BUNDLE_PATTERNS)
 
 
-def path_mtime(path: Path) -> float:
-    """Newest mtime under path: itself for a file, the freshest entry for a directory."""
-    if not path.is_dir():
-        return path.stat().st_mtime
-    newest = path.stat().st_mtime
-    for entry in path.rglob("*"):
-        try:
-            newest = max(newest, entry.stat().st_mtime)
-        except OSError:
-            continue
-    return newest
-
-
-@lru_cache(maxsize=None)
-def discover_artifacts(project: Project, since: Optional[float] = None) -> List[str]:
-    """Artifacts for project's type; `since` restricts to entries built at/after that time
-    (epoch seconds) so a partial build (e.g. iOS-only) doesn't surface a stale build from
-    another platform left over on disk."""
-    found = set()
-    patterns = ARTIFACT_PATTERNS.get(project.type, [])
+def artifact_patterns_for_build(
+    project: Project, selected_outputs: Sequence[str] = (),
+) -> tuple[str, ...]:
+    """Return the artifact patterns valid for the adapter invocation that just succeeded."""
+    if project.type == "flutter" and selected_outputs:
+        return tuple(
+            pattern
+            for output in selected_outputs
+            for pattern in FLUTTER_ARTIFACT_PATTERNS.get(output, ())
+        )
+    patterns = list(ARTIFACT_PATTERNS.get(project.type, []))
     if project.type == "tauri":
-        patterns = [*patterns, *TAURI_TARGET_BUNDLE_PATTERNS]
-    for pattern in patterns:
+        patterns.extend(TAURI_TARGET_BUNDLE_PATTERNS)
+    return tuple(patterns)
+
+
+def discover_artifacts(
+    project: Project, patterns: Optional[tuple[str, ...]] = None,
+) -> List[str]:
+    """Find valid artifacts, optionally scoped to the outputs selected for this build."""
+    found = set()
+    selected_patterns = artifact_patterns_for_build(project) if patterns is None else patterns
+    for pattern in selected_patterns:
         for value in glob.glob(str(project.path / pattern), recursive=True):
             path = Path(value)
             if not (path.is_file() or (path.is_dir() and pattern in DIRECTORY_PATTERNS)):
-                continue
-            if since is not None and path_mtime(path) < since:
                 continue
             found.add(str(path.resolve()))
     return sorted(found)
@@ -1383,9 +1388,9 @@ def publish_google_play(
 
 def publish_project(
     project: Project, options: Options, environment: Dict[str, str],
-    since: Optional[float] = None,
+    patterns: Optional[tuple[str, ...]] = None,
 ) -> int:
-    artifacts = [Path(value) for value in discover_artifacts(project, since)]
+    artifacts = [Path(value) for value in discover_artifacts(project, patterns)]
     publishable = [path for path in artifacts if path.suffix.lower() in {".ipa", ".pkg", ".aab"}]
     if options.artifact is not None:
         candidate = options.artifact.expanduser()
@@ -1433,7 +1438,9 @@ def pattern_static_prefix(pattern: str) -> Optional[str]:
     return "/".join(segments) if segments else None
 
 
-def preferred_output_roots(project: Project, artifacts: Sequence[Path]) -> List[Path]:
+def preferred_output_roots(
+    project: Project, artifacts: Sequence[Path], patterns: Optional[tuple[str, ...]] = None,
+) -> List[Path]:
     """Derive output roots per project type straight from ARTIFACT_PATTERNS.
 
     Only prefixes that actually produced an artifact this build are considered,
@@ -1445,7 +1452,10 @@ def preferred_output_roots(project: Project, artifacts: Sequence[Path]) -> List[
     folders instead of collapsing to that shared segment.
     """
     resolved_prefixes: List[Path] = []
-    for pattern in ARTIFACT_PATTERNS.get(project.type, []):
+    selected_patterns = (
+        tuple(ARTIFACT_PATTERNS.get(project.type, [])) if patterns is None else patterns
+    )
+    for pattern in selected_patterns:
         prefix = pattern_static_prefix(pattern)
         if not prefix:
             continue
@@ -1470,16 +1480,18 @@ def preferred_output_roots(project: Project, artifacts: Sequence[Path]) -> List[
     return roots
 
 
-def artifact_output_directories(project: Project, since: Optional[float] = None) -> List[Path]:
+def artifact_output_directories(
+    project: Project, patterns: Optional[tuple[str, ...]] = None,
+) -> List[Path]:
     """Return useful folders to reveal after a successful build."""
-    artifacts = [Path(value) for value in discover_artifacts(project, since)]
+    artifacts = [Path(value) for value in discover_artifacts(project, patterns)]
     if not artifacts:
         eprint(f"{RED}⚠️  {t('OUTPUT_DIR_NOT_FOUND', path=project.path)}{NC}")
         return []
 
     selected: Set[Path] = set()
     covered: Set[Path] = set()
-    for root in preferred_output_roots(project, artifacts):
+    for root in preferred_output_roots(project, artifacts, patterns):
         resolved_root = root.resolve()
         matches = {
             artifact for artifact in artifacts
@@ -1550,16 +1562,16 @@ def terminal_hyperlink(path: Path) -> str:
 
 def open_artifact_directories(
     projects: Sequence[Project], environment: Optional[Dict[str, str]] = None,
-    build_started_at: Optional[Dict[Project, float]] = None,
+    artifact_scopes: Optional[Dict[Project, tuple[str, ...]]] = None,
 ) -> List[str]:
     environment = os.environ.copy() if environment is None else environment
     if not should_open_output(environment):
         return []
-    build_started_at = build_started_at or {}
+    artifact_scopes = artifact_scopes or {}
     directories = sorted({
         directory
         for project in projects
-        for directory in artifact_output_directories(project, build_started_at.get(project))
+        for directory in artifact_output_directories(project, artifact_scopes.get(project))
     }, key=str)
     opened: List[str] = []
     for directory in directories:
@@ -1589,7 +1601,10 @@ class BuildReport:
             path.parent.mkdir(parents=True, exist_ok=True)
             self.write()
 
-    def append(self, project: Project, status: int, planned: bool, since: Optional[float] = None) -> None:
+    def append(
+        self, project: Project, status: int, planned: bool,
+        patterns: Optional[tuple[str, ...]] = None,
+    ) -> None:
         if not self.path:
             return
         result = {
@@ -1597,7 +1612,7 @@ class BuildReport:
             "project": str(project.path),
             "status": "planned" if planned else ("success" if status == 0 else "failed"),
             "exit_code": status,
-            "artifacts": discover_artifacts(project, since) if status == 0 and not planned else [],
+            "artifacts": discover_artifacts(project, patterns) if status == 0 and not planned else [],
         }
         with self.lock:
             self.results.append(result)
@@ -1959,7 +1974,7 @@ def resolved_plan_items(projects: Sequence[Project], options: Options, root: Pat
 
 def run_project(
     project: Project, options: Options, report: BuildReport,
-    build_started_at: Optional[Dict[Project, float]] = None,
+    artifact_scopes: Optional[Dict[Project, tuple[str, ...]]] = None,
 ) -> int:
     adapter_relative = ADAPTERS.get(project.type)
     if not adapter_relative:
@@ -1989,14 +2004,34 @@ def run_project(
         "UBS_RUNTIME_ROOT": str(RUNTIME_ROOT),
         "TAURI_OBFUSCATE_JS": str(options.obfuscate_js).lower(),
     })
-    start_time = time.time()
-    if build_started_at is not None:
-        build_started_at[project] = start_time
-    if project.type in PYTHON_ADAPTER_TYPES:
-        status = run_python_adapter(project.type, project.path, environment)
-    else:
-        status = subprocess.run(["bash", str(adapter)], cwd=project.path, env=environment, check=False).returncode
-    report.append(project, status, False, start_time)
+    scope_path: Optional[Path] = None
+    if project.type == "flutter":
+        descriptor, scope_name = tempfile.mkstemp(prefix="ubs-artifact-scope-")
+        os.close(descriptor)
+        scope_path = Path(scope_name)
+        environment["UBS_INTERNAL_ARTIFACT_SCOPE_FILE"] = scope_name
+    try:
+        if project.type in PYTHON_ADAPTER_TYPES:
+            status = run_python_adapter(project.type, project.path, environment)
+        else:
+            status = subprocess.run(
+                ["bash", str(adapter)], cwd=project.path, env=environment, check=False,
+            ).returncode
+        selected_outputs = tuple(
+            line.strip()
+            for line in (scope_path.read_text(encoding="utf-8").splitlines() if scope_path else ())
+            if line.strip() in FLUTTER_ARTIFACT_PATTERNS
+        )
+    finally:
+        if scope_path is not None:
+            scope_path.unlink(missing_ok=True)
+    patterns = (
+        artifact_patterns_for_build(project, selected_outputs)
+        if project.type == "flutter" and selected_outputs else None
+    )
+    if artifact_scopes is not None and patterns is not None:
+        artifact_scopes[project] = patterns
+    report.append(project, status, False, patterns)
     return status
 
 
@@ -2012,7 +2047,7 @@ def execute_projects(
     succeeded = failed = skipped = 0
     successful_projects: List[Project] = []
     unavailable: Set[Project] = set()
-    build_started_at: Dict[Project, float] = {}
+    artifact_scopes: Dict[Project, tuple[str, ...]] = {}
     if options.jobs == 1 or len(projects) == 1 or options.fail_fast:
         if options.fail_fast and options.jobs > 1:
             print(f"{YELLOW}{t('FAIL_FAST_SEQUENTIAL')}{NC}")
@@ -2027,7 +2062,7 @@ def execute_projects(
                 )
                 report.append_skipped(project, reason)
                 continue
-            status = run_project(project, options, report, build_started_at)
+            status = run_project(project, options, report, artifact_scopes)
             if status == 0:
                 succeeded += 1
                 successful_projects.append(project)
@@ -2050,7 +2085,7 @@ def execute_projects(
             results = []
             for project in group:
                 try:
-                    status = run_project(project, options, report, build_started_at)
+                    status = run_project(project, options, report, artifact_scopes)
                 except Exception as error:
                     eprint(f"{RED}✗ {t('BUILD_GROUP_ERROR', error=error)}{NC}")
                     report.append(project, 1, False)
@@ -2102,13 +2137,13 @@ def execute_projects(
         f"{RED}{t('BUILD_SUMMARY_FAILED')}: {failed}{NC}  {YELLOW}{t('BUILD_SUMMARY_SKIPPED')}: {skipped}{NC}"
     )
     if not options.dry_run:
-        open_artifact_directories(successful_projects, build_started_at=build_started_at)
+        open_artifact_directories(successful_projects, artifact_scopes=artifact_scopes)
     if failed:
         if options.publish is not False:
             eprint(f"{YELLOW}{t('PUBLISH_SKIPPED_DUE_TO_FAILURE')}{NC}")
         return 1
     if should_publish_after_build(options, root):
-        return publish_projects(successful_projects, options, os.environ.copy(), build_started_at)
+        return publish_projects(successful_projects, options, os.environ.copy(), artifact_scopes)
     return 0
 
 
@@ -2267,12 +2302,12 @@ def should_publish_after_build(options: Options, root: Path) -> bool:
 
 def publish_projects(
     projects: Sequence[Project], options: Options, environment: Dict[str, str],
-    build_started_at: Optional[Dict[Project, float]] = None,
+    artifact_scopes: Optional[Dict[Project, tuple[str, ...]]] = None,
 ) -> int:
-    build_started_at = build_started_at or {}
+    artifact_scopes = artifact_scopes or {}
     succeeded = failed = 0
     for project in projects:
-        status = publish_project(project, options, environment, build_started_at.get(project))
+        status = publish_project(project, options, environment, artifact_scopes.get(project))
         if status == 0:
             succeeded += 1
         else:
@@ -2374,16 +2409,16 @@ def main(argv: Sequence[str]) -> int:
         if not options.obfuscate_js_explicit and any(project.type == "tauri" for project in projects):
             options.obfuscate_js = resolve_obfuscate_default(root)
         if len(projects) == 1 and not options.build_all and options.jobs == 1:
-            build_started_at: Dict[Project, float] = {}
-            status = run_project(projects[0], options, report, build_started_at)
+            artifact_scopes: Dict[Project, tuple[str, ...]] = {}
+            status = run_project(projects[0], options, report, artifact_scopes)
             if status == 0 and not options.dry_run:
-                open_artifact_directories(projects, build_started_at=build_started_at)
+                open_artifact_directories(projects, artifact_scopes=artifact_scopes)
             if status != 0:
                 if options.publish is not False:
                     eprint(f"{YELLOW}{t('PUBLISH_SKIPPED_DUE_TO_FAILURE')}{NC}")
                 return status
             if should_publish_after_build(options, root):
-                return publish_projects(projects, options, os.environ.copy(), build_started_at)
+                return publish_projects(projects, options, os.environ.copy(), artifact_scopes)
             return status
         return execute_projects(projects, options, report, root)
     except (ValueError, OSError) as error:

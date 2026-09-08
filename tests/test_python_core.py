@@ -86,6 +86,62 @@ class PythonCoreTests(unittest.TestCase):
                 [output],
             )
 
+    def test_incremental_flutter_scope_keeps_selected_old_artifact_only(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            aab = root / "build/app/outputs/bundle/release/app-release.aab"
+            ipa = root / "build/ios/ipa/app.ipa"
+            aab.parent.mkdir(parents=True)
+            ipa.parent.mkdir(parents=True)
+            aab.write_bytes(b"unchanged aab")
+            ipa.write_bytes(b"stale ipa")
+            os.utime(aab, (1, 1))
+            os.utime(ipa, (1, 1))
+            project = ubs.Project("flutter", root)
+            patterns = ubs.artifact_patterns_for_build(project, ("appbundle",))
+            self.assertEqual(ubs.discover_artifacts(project, patterns), [str(aab)])
+            self.assertEqual(
+                ubs.artifact_output_directories(project, patterns), [aab.parent],
+            )
+            with mock.patch.object(ubs, "publish_google_play", return_value=0) as publish:
+                self.assertEqual(
+                    ubs.publish_project(project, ubs.Options(root=root), {}, patterns), 0,
+                )
+                publish.assert_called_once_with(aab, project, {})
+
+    def test_flutter_adapter_scope_flows_into_build_report(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            aab = root / "build/app/outputs/bundle/release/app-release.aab"
+            ipa = root / "build/ios/ipa/stale.ipa"
+            aab.parent.mkdir(parents=True)
+            ipa.parent.mkdir(parents=True)
+            aab.write_bytes(b"unchanged aab")
+            ipa.write_bytes(b"stale ipa")
+            os.utime(aab, (1, 1))
+            os.utime(ipa, (1, 1))
+            report_path = root / "report.json"
+            scopes = {}
+            scope_file = None
+
+            def run_adapter(_command, **kwargs):
+                nonlocal scope_file
+                scope_file = Path(kwargs["env"]["UBS_INTERNAL_ARTIFACT_SCOPE_FILE"])
+                scope_file.write_text("appbundle\n", encoding="utf-8")
+                return mock.Mock(returncode=0)
+
+            project = ubs.Project("flutter", root)
+            with mock.patch.object(ubs.subprocess, "run", side_effect=run_adapter):
+                status = ubs.run_project(
+                    project, ubs.Options(root=root), ubs.BuildReport(report_path), scopes,
+                )
+            self.assertEqual(status, 0)
+            self.assertIsNotNone(scope_file)
+            self.assertFalse(scope_file.exists())
+            self.assertEqual(scopes[project], ubs.FLUTTER_ARTIFACT_PATTERNS["appbundle"])
+            result = json.loads(report_path.read_text(encoding="utf-8"))["results"][0]
+            self.assertEqual(result["artifacts"], [str(aab)])
+
     def test_output_directories_cover_tauri_gradle_and_xcode(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
@@ -202,7 +258,7 @@ class PythonCoreTests(unittest.TestCase):
                     mock.patch.object(ubs, "open_artifact_directories") as opener:
                 status = ubs.main(["build", "--non-interactive", str(root)])
             self.assertEqual(status, 0)
-            opener.assert_called_once_with([ubs.Project("node", root)], build_started_at=mock.ANY)
+            opener.assert_called_once_with([ubs.Project("node", root)], artifact_scopes=mock.ANY)
 
     def _mock_tty(self, is_tty: bool) -> mock.Mock:
         mock_sys = mock.Mock(wraps=ubs.sys)
@@ -316,7 +372,6 @@ class PythonCoreTests(unittest.TestCase):
             first.write_bytes(b"first")
             second.write_bytes(b"second")
             project = ubs.Project("android", root)
-            ubs.discover_artifacts.cache_clear()
             with mock.patch.object(ubs, "publish_google_play", return_value=0) as publish:
                 self.assertEqual(ubs.publish_project(project, ubs.Options(root=root), {}), 1)
                 publish.assert_not_called()
@@ -658,7 +713,7 @@ class PythonCoreTests(unittest.TestCase):
             self.assertEqual(observed, ["core", "app"])
             opener.assert_called_once_with([
                 ubs.Project("node", core), ubs.Project("node", app),
-            ], build_started_at=mock.ANY)
+            ], artifact_scopes=mock.ANY)
 
     def test_xcode_adapter_archives_with_discovered_scheme(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -738,7 +793,7 @@ class PythonCoreTests(unittest.TestCase):
             self.assertEqual(status, 1)
             self.assertEqual(observed, projects)
             opener.assert_called_once_with(
-                [projects[0], projects[2]], build_started_at=mock.ANY,
+                [projects[0], projects[2]], artifact_scopes=mock.ANY,
             )
 
 
