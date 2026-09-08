@@ -27,8 +27,10 @@
   let timer = null;
   let startedAt = 0;
   let copyFeedbackTimer = null;
+  let versionPreviewRequest = 0;
 
   const elements = {
+    addProject: document.querySelector("#add-project"),
     chooseFolder: document.querySelector("#choose-folder"),
     projectPath: document.querySelector("#project-path"),
     projectBadge: document.querySelector("#project-badge"),
@@ -44,6 +46,9 @@
     historyCount: document.querySelector("#history-count"),
     historyEmpty: document.querySelector("#history-empty"),
     versionBumps: [...document.querySelectorAll('input[name="version-bump"]')],
+    versionPreview: document.querySelector("#version-preview"),
+    currentVersion: document.querySelector("#current-version"),
+    nextVersion: document.querySelector("#next-version"),
     jobs: [...document.querySelectorAll('input[name="jobs"]')],
     jobsCard: document.querySelector("#jobs-card"),
     cleanBuild: document.querySelector("#clean-build"),
@@ -82,6 +87,9 @@
     document.documentElement.lang = locale;
     document.querySelectorAll("[data-i18n]").forEach((element) => {
       element.textContent = text(element.dataset.i18n);
+    });
+    document.querySelectorAll("[data-i18n-aria-label]").forEach((element) => {
+      element.setAttribute("aria-label", text(element.dataset.i18nAriaLabel));
     });
     elements.localeName.textContent = text("language");
   }
@@ -203,13 +211,16 @@
     renderHistory();
     if (selectedProject) setPipeline("validate");
     else setPipeline(null);
+    refreshVersionPreview();
   }
 
-  function selectProject(project, announce = true, closeChoice = true) {
+  function selectProject(project, announce = true, closeChoice = true, restoreHistory = false) {
     selectedProject = project;
     if (closeChoice) elements.projectChoice.hidden = true;
     saveCurrentProject(project);
-    applyBuildSettings(projectStore.latestSettings(buildHistory, project.path));
+    applyBuildSettings(restoreHistory
+      ? projectStore.latestSettings(buildHistory, project.path)
+      : projectStore.normalizeSettings());
     applySelectedProject();
     if (announce) setProjectState(text("projectSelected", { name: projectName(project.path) }), "success");
   }
@@ -254,6 +265,34 @@
     syncBuildModeVisibility();
   }
 
+  function formatVersionPoint(point) {
+    if (!point?.version) return "";
+    return point.build
+      ? `${point.version} · ${text("versionBuildValue", { value: point.build })}`
+      : point.version;
+  }
+
+  async function refreshVersionPreview() {
+    const request = ++versionPreviewRequest;
+    elements.versionPreview.hidden = true;
+    elements.currentVersion.textContent = "";
+    elements.nextVersion.textContent = "";
+    if (!invoke || !selectedProject) return;
+    try {
+      const preview = await invoke("preview_version", {
+        project: selectedProject.path,
+        kind: selectedProject.type,
+        bump: selectedValue(elements.versionBumps)
+      });
+      if (request !== versionPreviewRequest) return;
+      elements.currentVersion.textContent = formatVersionPoint(preview.current);
+      elements.nextVersion.textContent = formatVersionPoint(preview.next);
+      elements.versionPreview.hidden = false;
+    } catch {
+      if (request === versionPreviewRequest) elements.versionPreview.hidden = true;
+    }
+  }
+
   function syncBuildModeVisibility() {
     const outputCount = elements.outputChecks.filter((input) => input.checked).length;
     const showBuildMode = selectedProject?.type === "flutter" && outputCount >= 2;
@@ -276,6 +315,7 @@
   }
 
   async function chooseFolder() {
+    if (running) return;
     if (!openDialog || !invoke) {
       setProjectState(text("desktopOnly"), "error");
       return;
@@ -405,6 +445,7 @@
 
   function setRunning(value) {
     running = value;
+    elements.addProject.disabled = value;
     elements.chooseFolder.disabled = value;
     [...elements.versionBumps, ...elements.jobs].forEach((input) => {
       input.disabled = value;
@@ -530,6 +571,7 @@
     } finally {
       setRunning(false);
       rememberBuild(project, settings, historyResult);
+      refreshVersionPreview();
     }
   }
 
@@ -554,6 +596,7 @@
       selectProject(restored, false);
       setProjectState(text("projectSelected", { name: projectName(restored.path) }), "success");
     }
+    elements.addProject.addEventListener("click", chooseFolder);
     elements.chooseFolder.addEventListener("click", chooseFolder);
     elements.removeCurrentProject.addEventListener("click", removeCurrentProject);
     elements.projectList.addEventListener("change", syncProject);
@@ -562,10 +605,13 @@
       if (!button || running) return;
       const record = buildHistory[Number(button.dataset.index)];
       if (!record) return;
-      selectProject({ path: record.path, type: record.type });
+      selectProject({ path: record.path, type: record.type }, true, true, true);
     });
     elements.outputChecks.forEach((input) => {
       input.addEventListener("change", () => syncOutputChecks(input));
+    });
+    elements.versionBumps.forEach((input) => {
+      input.addEventListener("change", refreshVersionPreview);
     });
     elements.startBuild.addEventListener("click", startBuild);
     elements.cancelBuild.addEventListener("click", cancelBuild);

@@ -52,6 +52,19 @@ struct BuildResult {
     report: Option<Value>,
 }
 
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct VersionPoint {
+    version: String,
+    build: String,
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+struct VersionPreview {
+    current: VersionPoint,
+    next: VersionPoint,
+}
+
 #[derive(Debug)]
 struct PreparedBuild {
     runtime_root: PathBuf,
@@ -70,12 +83,13 @@ async fn detect_projects(app: AppHandle, root: String) -> Result<Value, String> 
     let runtime_root = runtime_root(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
         let mut command = ubs_command(&runtime_root)?;
-        command.args(["detect", "--json"]).arg(root);
+        command.args(["detect", "--json"]).arg(&root);
         let output = command
             .output()
             .map_err(|error| format!("UBS detect 실행 실패: {error}"))?;
         let stdout = String::from_utf8_lossy(&output.stdout);
         if let Ok(value) = serde_json::from_str::<Value>(&stdout) {
+            install_missing_ubs(&runtime_root, &root, &value)?;
             return Ok(value);
         }
         let stderr = strip_ansi(&String::from_utf8_lossy(&output.stderr));
@@ -87,6 +101,12 @@ async fn detect_projects(app: AppHandle, root: String) -> Result<Value, String> 
     })
     .await
     .map_err(|error| format!("UBS detect 작업 실패: {error}"))?
+}
+
+#[tauri::command]
+fn preview_version(project: String, kind: String, bump: String) -> Result<VersionPreview, String> {
+    let project = canonical_directory(&project)?;
+    version_preview(&project, &kind, &bump)
 }
 
 #[tauri::command]
@@ -439,6 +459,216 @@ fn canonical_directory(raw: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
+fn install_missing_ubs(
+    runtime_root: &Path,
+    selected_root: &Path,
+    detected: &Value,
+) -> Result<(), String> {
+    let projects = detected
+        .as_array()
+        .ok_or_else(|| "UBS detect 결과 형식이 올바르지 않습니다.".to_string())?;
+    let mut installed_roots = Vec::new();
+    for project in projects {
+        let raw = project
+            .get("path")
+            .and_then(Value::as_str)
+            .ok_or_else(|| "감지된 프로젝트 경로가 없습니다.".to_string())?;
+        let project_root = canonical_directory(raw)?;
+        if !project_root.starts_with(selected_root) {
+            return Err(format!(
+                "선택한 폴더 밖의 프로젝트에는 UBS를 설치하지 않습니다: {}",
+                project_root.display()
+            ));
+        }
+        if installed_roots.contains(&project_root) {
+            continue;
+        }
+        install_bundled_ubs(runtime_root, &project_root)?;
+        installed_roots.push(project_root);
+    }
+    Ok(())
+}
+
+fn install_bundled_ubs(runtime_root: &Path, project_root: &Path) -> Result<bool, String> {
+    let build_script = project_root.join("build.sh");
+    let python_runtime = project_root.join("scripts/ubs.py");
+    if build_script.is_file() && python_runtime.is_file() {
+        return Ok(false);
+    }
+
+    let installer = runtime_root.join("install.sh");
+    if !installer.is_file() {
+        return Err("앱에 UBS 설치기가 포함되지 않았습니다.".to_string());
+    }
+    let source_url = tauri::Url::from_directory_path(runtime_root)
+        .map_err(|_| "앱의 UBS 설치 소스 경로를 변환하지 못했습니다.".to_string())?;
+    #[cfg(windows)]
+    let mut command = Command::new("bash");
+    #[cfg(not(windows))]
+    let mut command = Command::new("/bin/bash");
+    command
+        .arg(installer)
+        .current_dir(project_root)
+        .env("UBS_INSTALL_BASE_URL", source_url.as_str())
+        .env("UBS_INSTALL_ALLOW_FILE", "true");
+    if build_script.symlink_metadata().is_ok() || python_runtime.symlink_metadata().is_ok() {
+        command.env("UBS_FORCE", "true");
+    }
+    add_common_executable_paths(&mut command);
+    let output = command
+        .output()
+        .map_err(|error| format!("UBS 자동 설치 실행 실패: {error}"))?;
+    if !output.status.success() {
+        let stderr = strip_ansi(&String::from_utf8_lossy(&output.stderr));
+        let stdout = strip_ansi(&String::from_utf8_lossy(&output.stdout));
+        let detail = if stderr.trim().is_empty() {
+            stdout.trim()
+        } else {
+            stderr.trim()
+        };
+        return Err(if detail.is_empty() {
+            format!("UBS 자동 설치 실패: {}", output.status)
+        } else {
+            format!("UBS 자동 설치 실패: {detail}")
+        });
+    }
+    if !build_script.is_file() || !python_runtime.is_file() {
+        return Err("UBS 자동 설치 후 필수 실행 파일을 확인하지 못했습니다.".to_string());
+    }
+    Ok(true)
+}
+
+fn version_preview(project: &Path, kind: &str, bump: &str) -> Result<VersionPreview, String> {
+    if !matches!(bump, "none" | "build" | "patch" | "minor" | "major") {
+        return Err("지원하지 않는 버전 정책입니다.".to_string());
+    }
+    match kind {
+        "tauri" => tauri_version_preview(project, bump),
+        "flutter" => flutter_version_preview(project, bump),
+        _ => Err("이 프로젝트 형식은 버전 미리보기를 지원하지 않습니다.".to_string()),
+    }
+}
+
+fn tauri_version_preview(project: &Path, bump: &str) -> Result<VersionPreview, String> {
+    let config_path = project.join("src-tauri/tauri.conf.json");
+    let config: Value = serde_json::from_str(
+        &fs::read_to_string(&config_path)
+            .map_err(|error| format!("Tauri 버전 파일 읽기 실패: {error}"))?,
+    )
+    .map_err(|error| format!("Tauri 설정 분석 실패: {error}"))?;
+    let version = config
+        .get("version")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "Tauri 설정에 version이 없습니다.".to_string())?;
+    let build = config
+        .pointer("/bundle/macOS/bundleVersion")
+        .and_then(Value::as_str)
+        .unwrap_or(version);
+    let next_version = bump_version_name(version, bump)?;
+    let next_build = if bump == "none" {
+        build.to_string()
+    } else {
+        increment_trailing_number(build)?
+    };
+    Ok(VersionPreview {
+        current: VersionPoint {
+            version: version.to_string(),
+            build: build.to_string(),
+        },
+        next: VersionPoint {
+            version: next_version,
+            build: next_build,
+        },
+    })
+}
+
+fn flutter_version_preview(project: &Path, bump: &str) -> Result<VersionPreview, String> {
+    let pubspec_path = project.join("pubspec.yaml");
+    let pubspec = fs::read_to_string(&pubspec_path)
+        .map_err(|error| format!("Flutter 버전 파일 읽기 실패: {error}"))?;
+    let current = pubspec
+        .lines()
+        .find_map(|line| line.strip_prefix("version:").map(str::trim))
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "pubspec.yaml에 version이 없습니다.".to_string())?;
+    let (version, build) = current.rsplit_once('+').unwrap_or((current, "0"));
+    let next_version = bump_version_name(version, bump)?;
+    let next_build = if bump == "none" {
+        build.to_string()
+    } else {
+        increment_trailing_number(build)?
+    };
+    Ok(VersionPreview {
+        current: VersionPoint {
+            version: version.to_string(),
+            build: build.to_string(),
+        },
+        next: VersionPoint {
+            version: next_version,
+            build: next_build,
+        },
+    })
+}
+
+fn bump_version_name(current: &str, bump: &str) -> Result<String, String> {
+    if matches!(bump, "none" | "build") {
+        return Ok(current.to_string());
+    }
+    let stable = current.split_once('-').map_or(current, |(value, _)| value);
+    let mut parts = stable.split('.');
+    let major = parts
+        .next()
+        .and_then(|value| value.parse::<u64>().ok())
+        .ok_or_else(|| format!("버전 형식이 올바르지 않습니다: {current}"))?;
+    let minor = parts
+        .next()
+        .and_then(|value| value.parse::<u64>().ok())
+        .ok_or_else(|| format!("버전 형식이 올바르지 않습니다: {current}"))?;
+    let patch = parts
+        .next()
+        .and_then(|value| value.parse::<u64>().ok())
+        .ok_or_else(|| format!("버전 형식이 올바르지 않습니다: {current}"))?;
+    if parts.next().is_some() {
+        return Err(format!("버전 형식이 올바르지 않습니다: {current}"));
+    }
+    match bump {
+        "patch" => Ok(format!(
+            "{major}.{minor}.{}",
+            patch
+                .checked_add(1)
+                .ok_or_else(|| "패치 버전이 너무 큽니다.".to_string())?
+        )),
+        "minor" => Ok(format!(
+            "{major}.{}.0",
+            minor
+                .checked_add(1)
+                .ok_or_else(|| "마이너 버전이 너무 큽니다.".to_string())?
+        )),
+        "major" => Ok(format!(
+            "{}.0.0",
+            major
+                .checked_add(1)
+                .ok_or_else(|| "메이저 버전이 너무 큽니다.".to_string())?
+        )),
+        _ => Err("지원하지 않는 버전 정책입니다.".to_string()),
+    }
+}
+
+fn increment_trailing_number(current: &str) -> Result<String, String> {
+    let digits_at = current
+        .char_indices()
+        .rev()
+        .find(|(_, character)| !character.is_ascii_digit())
+        .map_or(0, |(index, character)| index + character.len_utf8());
+    let number = current[digits_at..]
+        .parse::<u64>()
+        .map_err(|_| format!("빌드 번호 형식이 올바르지 않습니다: {current}"))?;
+    let next = number
+        .checked_add(1)
+        .ok_or_else(|| "빌드 번호가 너무 큽니다.".to_string())?;
+    Ok(format!("{}{next}", &current[..digits_at]))
+}
+
 fn ubs_command(runtime_root: &Path) -> Result<Command, String> {
     let script = runtime_root.join("build.sh");
     if !script.is_file() {
@@ -579,6 +809,7 @@ fn main() {
         .manage(BuildState::default())
         .invoke_handler(tauri::generate_handler![
             detect_projects,
+            preview_version,
             run_build,
             cancel_build,
             open_artifact_location
@@ -685,6 +916,93 @@ mod tests {
             .expect("repository root");
         assert!(root.join("build.sh").is_file());
         assert!(root.join("scripts/ubs.py").is_file());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn bundled_installer_repairs_partial_ubs_and_skips_complete_install() {
+        let runtime = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .canonicalize()
+            .expect("repository root");
+        let target = std::env::temp_dir().join(format!(
+            "ubs-desktop-install-test-{}",
+            temporary_report_path()
+                .file_stem()
+                .expect("temporary file stem")
+                .to_string_lossy()
+        ));
+        fs::create_dir_all(target.join("src-tauri")).expect("Tauri fixture directory");
+        fs::write(target.join("src-tauri/tauri.conf.json"), b"{}").expect("Tauri fixture config");
+        fs::write(target.join("build.sh"), b"#!/usr/bin/env bash\n# stale\n")
+            .expect("partial UBS fixture");
+
+        assert!(install_bundled_ubs(&runtime, &target).expect("automatic UBS install"));
+        assert_eq!(
+            fs::read(target.join("build.sh")).expect("installed build.sh"),
+            fs::read(runtime.join("build.sh")).expect("bundled build.sh")
+        );
+        assert!(target.join("scripts/ubs.py").is_file());
+        assert!(!install_bundled_ubs(&runtime, &target).expect("complete UBS check"));
+
+        fs::remove_dir_all(target).expect("test cleanup");
+    }
+
+    #[test]
+    fn version_preview_matches_tauri_and_flutter_build_policies() {
+        let target = std::env::temp_dir().join(format!(
+            "ubs-version-preview-test-{}",
+            temporary_report_path()
+                .file_stem()
+                .expect("temporary file stem")
+                .to_string_lossy()
+        ));
+        fs::create_dir_all(target.join("src-tauri")).expect("Tauri fixture directory");
+        fs::write(
+            target.join("src-tauri/tauri.conf.json"),
+            br#"{"version":"1.2.3","bundle":{"macOS":{"bundleVersion":"7"}}}"#,
+        )
+        .expect("Tauri fixture config");
+
+        assert_eq!(
+            version_preview(&target, "tauri", "build").expect("Tauri build preview"),
+            VersionPreview {
+                current: VersionPoint {
+                    version: "1.2.3".to_string(),
+                    build: "7".to_string(),
+                },
+                next: VersionPoint {
+                    version: "1.2.3".to_string(),
+                    build: "8".to_string(),
+                },
+            }
+        );
+        assert_eq!(
+            version_preview(&target, "tauri", "minor")
+                .expect("Tauri semantic version preview")
+                .next,
+            VersionPoint {
+                version: "1.3.0".to_string(),
+                build: "8".to_string(),
+            }
+        );
+
+        fs::write(
+            target.join("pubspec.yaml"),
+            b"name: fixture\nversion: 2.4.6+9\n",
+        )
+        .expect("Flutter fixture config");
+        assert_eq!(
+            version_preview(&target, "flutter", "patch")
+                .expect("Flutter version preview")
+                .next,
+            VersionPoint {
+                version: "2.4.7".to_string(),
+                build: "10".to_string(),
+            }
+        );
+
+        fs::remove_dir_all(target).expect("test cleanup");
     }
 
     #[cfg(unix)]

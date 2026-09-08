@@ -54,8 +54,9 @@ if (store.load(storage, "projects").length !== 0) throw new Error("corrupt stora
 
 const safe = store.normalizeSettings({ versionBump: "bogus", jobs: 8, clean: "yes", outputs: ["auto", "apk", "apk", "bad"] });
 if (JSON.stringify(safe) !== JSON.stringify({
-  versionBump: "none", jobs: 0, clean: false, outputs: ["apk"]
+  versionBump: "build", jobs: 0, clean: false, outputs: ["apk"]
 })) throw new Error("settings normalization contract failed");
+if (store.normalizeSettings().versionBump !== "build") throw new Error("default version policy contract failed");
 if (JSON.stringify(store.normalizeSettings().outputs) !== JSON.stringify(["appbundle", "ipa"])) {
   throw new Error("Flutter default outputs contract failed");
 }
@@ -96,7 +97,11 @@ csp = config["app"]["security"]["csp"]
 assert "unsafe-inline" not in json.dumps(csp)
 assert "unsafe-eval" not in json.dumps(csp)
 assert set(config["bundle"]["resources"].values()) >= {
-    "ubs-runtime/build.sh", "ubs-runtime/scripts/", "ubs-runtime/templates/", "ubs-runtime/VERSION"
+    "ubs-runtime/.env.example", "ubs-runtime/.env.macos.example",
+    "ubs-runtime/build.sh", "ubs-runtime/install.sh",
+    "ubs-runtime/native/ubs-helper/Cargo.lock", "ubs-runtime/native/ubs-helper/Cargo.toml",
+    "ubs-runtime/native/ubs-helper/src/", "ubs-runtime/scripts/",
+    "ubs-runtime/skills/universal-build/", "ubs-runtime/templates/", "ubs-runtime/VERSION"
 }
 assert config["bundle"]["macOS"]["signingIdentity"] == "-"
 
@@ -125,7 +130,8 @@ assert '<select id="version-bump">' not in html
 assert '<select id="jobs">' not in html
 assert html.count('name="version-bump"') == 5
 assert html.count('name="jobs"') == 2
-assert html.count('name="version-bump" value="none" checked') == 1
+assert html.count('name="version-bump" value="build" checked') == 1
+assert html.count('name="version-bump" value="none" checked') == 0
 assert html.count('name="jobs" value="0" checked') == 1
 assert 'value="auto"' not in html
 assert html.count('value="appbundle" checked') == 1
@@ -138,10 +144,13 @@ assert '<h1' not in html
 for removed_header_key in ('data-i18n="eyebrow"', 'data-i18n="title"', 'data-i18n="subtitle"'):
     assert removed_header_key not in html
 for current_project_contract in (
+    'id="add-project"', 'data-i18n-aria-label="chooseFolder"',
     'id="choose-folder"', 'id="current-project"', 'id="current-project-name"',
     'id="current-project-type"', 'id="remove-current-project"'
 ):
     assert current_project_contract in html
+for version_preview_contract in ('id="version-preview"', 'id="current-version"', 'id="next-version"'):
+    assert version_preview_contract in html
 for removed_library_contract in ('id="saved-projects"', 'id="saved-count"', 'id="saved-empty"'):
     assert removed_library_contract not in html
 assert 'id="jobs-card" class="option-card choice-card jobs-card" hidden' in html
@@ -160,7 +169,8 @@ assert html.index('id="start-build"') < html.index('id="build-result"') < html.i
 styles = (root / "ui/styles.css").read_text(encoding="utf-8")
 for responsive_log_contract in (
     '.workbench {', '.console-panel {\n  position: sticky;', '@media (max-width: 1220px)',
-    'grid-template-columns: 1fr;', '.run-command-stack {'
+    'grid-template-columns: 1fr;', '.run-command-stack {',
+    '.run-command-stack {\n  display: grid;\n  gap: 8px;\n  width: 100%;'
 ):
     assert responsive_log_contract in styles
 
@@ -172,8 +182,13 @@ for guardrail in ('"--non-interactive"', '"--no-publish"', "slot.active", "termi
     assert guardrail in rust
 
 app = (root / "ui/app.js").read_text(encoding="utf-8")
-for app_contract in ("projectStore", "saveCurrentProject", "syncBuildModeVisibility", "outputCount >= 2", "canonical_directory"):
+for app_contract in ("projectStore", "saveCurrentProject", "syncBuildModeVisibility", "outputCount >= 2", "canonical_directory", "install_bundled_ubs"):
     assert app_contract in app or app_contract in rust
+assert 'elements.addProject.addEventListener("click", chooseFolder)' in app
+assert 'projectStore.normalizeSettings());' in app
+assert 'selectProject({ path: record.path, type: record.type }, true, true, true)' in app
+for version_preview_contract in ('invoke("preview_version"', 'refreshVersionPreview', 'versionBuildValue'):
+    assert version_preview_contract in app
 assert 'output !== "auto"' not in app
 for copy_log_contract in ('navigator.clipboard?.writeText', 'document.execCommand("copy")', 'copyBuildLog', 'logCopyFailed'):
     assert copy_log_contract in app
