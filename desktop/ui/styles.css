@@ -131,6 +131,31 @@ a:focus-visible {
   box-shadow: 0 0 9px rgb(97 214 198 / 65%);
 }
 
+.side-add-project {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+  padding: 0;
+  border: 1px solid #31504f;
+  border-radius: 7px;
+  color: var(--accent);
+  background: rgb(25 63 61 / 42%);
+  font: 700 18px/1 var(--mono);
+  place-items: center;
+  cursor: pointer;
+}
+
+.side-add-project:hover:not(:disabled) {
+  border-color: #4e8b85;
+  background: rgb(37 89 84 / 50%);
+}
+
+.side-add-project:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
 .history-section {
   min-height: 0;
   margin-top: 32px;
@@ -694,6 +719,28 @@ select {
   opacity: .55;
 }
 
+.version-preview {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  margin-top: 2px;
+  color: #687b87;
+  font-size: 9px;
+}
+
+.version-preview code {
+  min-width: 0;
+  color: #b4c6ce;
+  font: 650 10px/1.4 var(--mono);
+  overflow-wrap: anywhere;
+}
+
+.version-preview .version-arrow {
+  margin: 0 3px;
+  color: var(--accent);
+}
+
 .toggle-card {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
@@ -891,8 +938,7 @@ select {
 }
 
 .run-actions {
-  display: flex;
-  align-items: flex-start;
+  display: grid;
   gap: 10px;
   margin-top: 12px;
   padding-top: 16px;
@@ -901,9 +947,8 @@ select {
 
 .run-command-stack {
   display: grid;
-  flex: 0 1 290px;
   gap: 8px;
-  width: min(100%, 290px);
+  width: 100%;
 }
 
 .run-command-stack > button {
@@ -914,7 +959,6 @@ select {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-right: auto;
   color: #647681;
   font-family: var(--mono);
   font-size: 9px;
@@ -1266,16 +1310,11 @@ select {
     display: none;
   }
 
-  .run-actions {
-    flex-wrap: wrap;
-  }
-
   .guardrail {
     width: 100%;
   }
 
   .run-command-stack {
-    flex-basis: 100%;
     width: 100%;
   }
 }

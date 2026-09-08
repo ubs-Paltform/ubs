@@ -5,7 +5,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FIXTURE="$(mktemp -d)"
 trap 'rm -rf "$FIXTURE"' EXIT
-mkdir -p "$FIXTURE/bin" "$FIXTURE/tauri/src-tauri" "$FIXTURE/flutter"
+mkdir -p "$FIXTURE/bin" "$FIXTURE/tauri/src-tauri" "$FIXTURE/tauri-no-build/src-tauri" \
+  "$FIXTURE/tauri-fail/src-tauri" "$FIXTURE/flutter"
 
 git_init() {
   git -C "$1" init -q
@@ -17,6 +18,7 @@ git_init() {
 
 printf '%s\n' '#!/usr/bin/env bash' \
   'if [ "${1:-}" = "--version" ]; then echo 10.0.0; exit 0; fi' \
+  'if [ "${UBS_TEST_FAIL:-false}" = true ]; then exit 19; fi' \
   'mkdir -p src-tauri/target/release/bundle/macos/Demo.app/Contents' \
   'mkdir -p src-tauri/target/release/bundle/deb' \
   ': > src-tauri/target/release/bundle/deb/demo.deb' \
@@ -45,6 +47,49 @@ python3 - "$FIXTURE/tauri/src-tauri/tauri.conf.json" <<'PY'
 import json, sys
 assert json.load(open(sys.argv[1], encoding="utf-8"))["bundle"]["macOS"]["bundleVersion"] == "2"
 PY
+
+printf '%s\n' \
+  '{' \
+  '  "productName": "Demo",' \
+  '  "version": "1.0.0",' \
+  '  "bundle": {"macOS": {}}' \
+  '}' > "$FIXTURE/tauri-no-build/src-tauri/tauri.conf.json"
+printf '%s\n' '{"scripts":{"tauri":"tauri"}}' > "$FIXTURE/tauri-no-build/package.json"
+git_init "$FIXTURE/tauri-no-build"
+PATH="$FIXTURE/bin:$PATH" UBS_NON_INTERACTIVE=true UBS_VERSION_BUMP=build \
+  UBS_BUNDLE_VERSION_BUMP=auto UBS_TAURI_PACKAGE_MODE=auto UBS_SKIP_INSTALL=true \
+  UBS_NO_NOTIFY=true TAURI_UNIVERSAL_MACOS=false \
+  bash -c 'cd "$1" && bash "$2"' _ "$FIXTURE/tauri-no-build" "$ROOT/scripts/build-tauri-macos.sh" \
+  >/dev/null
+python3 - "$FIXTURE/tauri-no-build/src-tauri/tauri.conf.json" <<'PY'
+import json, sys
+config = json.load(open(sys.argv[1], encoding="utf-8"))
+assert config["version"] == "1.0.0"
+assert config["bundle"]["macOS"]["bundleVersion"] == "1.0.1"
+PY
+[ "$(git -C "$FIXTURE/tauri-no-build" rev-list --count HEAD)" -eq 2 ] || {
+  echo "bundleVersion 없는 Tauri 빌드 번호 변경이 커밋되지 않았습니다." >&2
+  exit 1
+}
+
+printf '%s\n' \
+  '{"productName":"Demo","version":"1.0.0","bundle":{"macOS":{}}}' \
+  > "$FIXTURE/tauri-fail/src-tauri/tauri.conf.json"
+printf '%s\n' '{"scripts":{"tauri":"tauri"}}' > "$FIXTURE/tauri-fail/package.json"
+git_init "$FIXTURE/tauri-fail"
+cp "$FIXTURE/tauri-fail/src-tauri/tauri.conf.json" "$FIXTURE/tauri-fail/original.json"
+if PATH="$FIXTURE/bin:$PATH" UBS_TEST_FAIL=true UBS_NON_INTERACTIVE=true UBS_VERSION_BUMP=build \
+  UBS_BUNDLE_VERSION_BUMP=auto UBS_TAURI_PACKAGE_MODE=auto UBS_SKIP_INSTALL=true \
+  UBS_NO_NOTIFY=true TAURI_UNIVERSAL_MACOS=false \
+  bash -c 'cd "$1" && bash "$2"' _ "$FIXTURE/tauri-fail" "$ROOT/scripts/build-tauri-macos.sh" \
+  >/dev/null 2>&1; then
+  echo "실패 fixture가 성공했습니다." >&2
+  exit 1
+fi
+cmp "$FIXTURE/tauri-fail/original.json" "$FIXTURE/tauri-fail/src-tauri/tauri.conf.json" || {
+  echo "실패한 Tauri 빌드가 버전 파일 원문을 복원하지 않았습니다." >&2
+  exit 1
+}
 
 python3 - "$FIXTURE/tauri/src-tauri/tauri.conf.json" <<'PY'
 import json, sys

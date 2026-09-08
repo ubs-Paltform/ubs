@@ -43,8 +43,15 @@
       "signingIdentity": "-"
     },
     "resources": {
+      "../../.env.example": "ubs-runtime/.env.example",
+      "../../.env.macos.example": "ubs-runtime/.env.macos.example",
       "../../build.sh": "ubs-runtime/build.sh",
+      "../../install.sh": "ubs-runtime/install.sh",
+      "../../native/ubs-helper/Cargo.lock": "ubs-runtime/native/ubs-helper/Cargo.lock",
+      "../../native/ubs-helper/Cargo.toml": "ubs-runtime/native/ubs-helper/Cargo.toml",
+      "../../native/ubs-helper/src/": "ubs-runtime/native/ubs-helper/src/",
       "../../scripts/": "ubs-runtime/scripts/",
+      "../../skills/universal-build/": "ubs-runtime/skills/universal-build/",
       "../../templates/": "ubs-runtime/templates/",
       "../../VERSION": "ubs-runtime/VERSION"
     }
