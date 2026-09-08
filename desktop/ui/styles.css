@@ -1120,8 +1120,8 @@ select {
 
 .build-result {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: 8px;
   padding: 12px 16px;
   border-top: 1px solid var(--line-soft);
@@ -1131,7 +1131,13 @@ select {
   overflow: auto;
 }
 
-.build-result strong {
+.build-result-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.build-result-summary strong {
   margin-right: 8px;
 }
 
@@ -1144,7 +1150,7 @@ select {
 }
 
 .build-result code {
-  max-width: 100%;
+  min-width: 0;
   padding: 4px 6px;
   overflow: hidden;
   border-radius: 5px;
@@ -1152,6 +1158,42 @@ select {
   background: #101920;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.artifact-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+}
+
+.artifact-open-button {
+  padding: 5px 8px;
+  border: 1px solid #31534f;
+  border-radius: 6px;
+  color: var(--accent);
+  background: #10211f;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.artifact-open-button:hover:not(:disabled) {
+  border-color: #4a7773;
+  background: #142b28;
+}
+
+.artifact-open-button.error {
+  border-color: #593534;
+  color: var(--danger);
+  background: #211617;
+}
+
+.artifact-open-button:disabled {
+  opacity: .55;
+  cursor: wait;
 }
 
 [hidden] {

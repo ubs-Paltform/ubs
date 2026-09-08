@@ -23,7 +23,8 @@ window.UBS_MESSAGES = Object.freeze({
     chooseDialog: "UBS 프로젝트 선택", desktopOnly: "데스크톱 앱에서 실행하세요.",
     detectFailed: "프로젝트 감지에 실패했습니다.", building: "빌드 중", cancelling: "취소 중…",
     cancelled: "빌드 취소됨.", succeeded: "빌드 완료.", failed: "빌드 실패 · 종료 코드 {code}",
-    artifacts: "산출물 {count}개", noArtifacts: "보고된 산출물 없음", buildError: "빌드를 시작하지 못했습니다."
+    artifacts: "산출물 {count}개", openFolder: "폴더 열기", openFolderFailed: "열기 실패",
+    noArtifacts: "보고된 산출물 없음", buildError: "빌드를 시작하지 못했습니다."
   },
   en: {
     language: "English", skip: "Skip to build controls", workspace: "Workspace", build: "Build",
@@ -49,7 +50,8 @@ window.UBS_MESSAGES = Object.freeze({
     chooseDialog: "Choose a UBS project", desktopOnly: "Run this inside the desktop app.",
     detectFailed: "Project detection failed.", building: "Building", cancelling: "Cancelling…",
     cancelled: "Build cancelled.", succeeded: "Build complete.", failed: "Build failed · exit {code}",
-    artifacts: "{count} artifacts", noArtifacts: "No artifacts reported", buildError: "Could not start the build."
+    artifacts: "{count} artifacts", openFolder: "Open folder", openFolderFailed: "Open failed",
+    noArtifacts: "No artifacts reported", buildError: "Could not start the build."
   },
   ja: {
     language: "日本語", skip: "ビルド設定へ移動", workspace: "ワークスペース", build: "ビルド",
@@ -75,7 +77,8 @@ window.UBS_MESSAGES = Object.freeze({
     chooseDialog: "UBS プロジェクトを選択", desktopOnly: "デスクトップアプリで実行してください。",
     detectFailed: "プロジェクトを検出できませんでした。", building: "ビルド中", cancelling: "中止中…",
     cancelled: "ビルドを中止しました。", succeeded: "ビルド完了。", failed: "ビルド失敗 · 終了 {code}",
-    artifacts: "成果物 {count} 件", noArtifacts: "成果物の報告なし", buildError: "ビルドを開始できませんでした。"
+    artifacts: "成果物 {count} 件", openFolder: "フォルダを開く", openFolderFailed: "開けません",
+    noArtifacts: "成果物の報告なし", buildError: "ビルドを開始できませんでした。"
   },
   zh: {
     language: "简体中文", skip: "跳到构建设置", workspace: "工作区", build: "构建",
@@ -101,6 +104,7 @@ window.UBS_MESSAGES = Object.freeze({
     chooseDialog: "选择 UBS 项目", desktopOnly: "请在桌面应用中运行。",
     detectFailed: "项目检测失败。", building: "构建中", cancelling: "正在取消…",
     cancelled: "构建已取消。", succeeded: "构建完成。", failed: "构建失败 · 退出码 {code}",
-    artifacts: "{count} 个产物", noArtifacts: "未报告产物", buildError: "无法开始构建。"
+    artifacts: "{count} 个产物", openFolder: "打开文件夹", openFolderFailed: "打开失败",
+    noArtifacts: "未报告产物", buildError: "无法开始构建。"
   }
 });

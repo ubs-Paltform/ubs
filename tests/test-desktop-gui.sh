@@ -156,7 +156,7 @@ frontend = "\n".join(path.read_text(encoding="utf-8") for path in (root / "ui").
 assert "https://" not in frontend and "http://" not in frontend
 
 rust = (root / "src-tauri/src/main.rs").read_text(encoding="utf-8")
-for guardrail in ('"--non-interactive"', '"--no-publish"', "slot.active", "terminate_process_tree", "RunEvent::ExitRequested"):
+for guardrail in ('"--non-interactive"', '"--no-publish"', "slot.active", "terminate_process_tree", "RunEvent::ExitRequested", "open_artifact_location"):
     assert guardrail in rust
 
 app = (root / "ui/app.js").read_text(encoding="utf-8")
@@ -164,6 +164,8 @@ for app_contract in ("projectStore", "saveCurrentProject", "syncBuildModeVisibil
     assert app_contract in app or app_contract in rust
 for copy_log_contract in ('navigator.clipboard?.writeText', 'document.execCommand("copy")', 'copyBuildLog', 'logCopyFailed'):
     assert copy_log_contract in app
+for artifact_folder_contract in ('invoke("open_artifact_location", { path })', 'artifact-open-button', 'openFolderFailed'):
+    assert artifact_folder_contract in app
 for live_log_contract in ('"--verbose"', '"PYTHONUNBUFFERED"', '"UBS_FLUTTER_PARALLEL"'):
     assert live_log_contract in rust
 print("desktop GUI contract valid")

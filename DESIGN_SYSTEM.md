@@ -39,6 +39,7 @@ Alternatives considered:
 - Pipeline states use text, shape, and color together.
 - Wide windows keep controls on the left and a sticky, full-height build log on the right; narrow windows stack both in one column.
 - The build log remains visible before execution, preserves live output and artifacts, and exposes a localized copy action with accessible success or failure feedback.
+- Every reported artifact keeps its exact path visible and provides a direct Finder action.
 - Motion is limited to active progress and short hover transitions; `prefers-reduced-motion` disables it.
 - The operating-system language selects `ko`, `en`, `ja`, or `zh`; all other languages fall back to English.
 - Keyboard focus remains visible. Logs use a live region and never inject HTML.

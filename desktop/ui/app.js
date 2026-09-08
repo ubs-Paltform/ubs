@@ -441,6 +441,8 @@
   function renderResult(result) {
     const artifacts = result?.report?.results?.flatMap((item) => item.artifacts || []) || [];
     elements.buildResult.replaceChildren();
+    const resultSummary = document.createElement("div");
+    resultSummary.className = "build-result-summary";
     const summary = document.createElement("strong");
     summary.textContent = result.cancelled
       ? text("cancelled")
@@ -448,19 +450,41 @@
         ? text("succeeded")
         : text("failed", { code: result.exitCode ?? "?" });
     summary.className = result.success ? "result-success" : "result-error";
-    elements.buildResult.append(summary);
+    resultSummary.append(summary);
 
     const artifactSummary = document.createElement("span");
     artifactSummary.textContent = artifacts.length
       ? text("artifacts", { count: artifacts.length })
       : text("noArtifacts");
-    elements.buildResult.append(artifactSummary);
+    resultSummary.append(artifactSummary);
+    elements.buildResult.append(resultSummary);
     for (const artifact of artifacts.slice(0, 8)) {
       const path = typeof artifact === "string" ? artifact : artifact.path;
       if (!path) continue;
+      const row = document.createElement("div");
+      row.className = "artifact-row";
       const item = document.createElement("code");
       item.textContent = path;
-      elements.buildResult.append(item);
+      const openButton = document.createElement("button");
+      openButton.className = "artifact-open-button";
+      openButton.type = "button";
+      openButton.textContent = text("openFolder");
+      openButton.addEventListener("click", async () => {
+        if (!invoke) return;
+        openButton.textContent = text("openFolder");
+        openButton.classList.remove("error");
+        openButton.disabled = true;
+        try {
+          await invoke("open_artifact_location", { path });
+        } catch {
+          openButton.textContent = text("openFolderFailed");
+          openButton.classList.add("error");
+        } finally {
+          openButton.disabled = false;
+        }
+      });
+      row.append(item, openButton);
+      elements.buildResult.append(row);
     }
   }
 
