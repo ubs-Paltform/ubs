@@ -240,6 +240,21 @@ UBS_MSG_en_SKIP_INSTALL_ENABLED="UBS_SKIP_INSTALL=true — skipping dependency i
 UBS_MSG_ja_SKIP_INSTALL_ENABLED="UBS_SKIP_INSTALL=true — 依存関係のインストールをスキップします。"
 UBS_MSG_zh_SKIP_INSTALL_ENABLED="UBS_SKIP_INSTALL=true — 跳过依赖安装。"
 
+UBS_MSG_ko_TAURI_STATIC_FRONTEND_CARGO="package.json 없음 — Cargo Tauri로 직접 빌드합니다."
+UBS_MSG_en_TAURI_STATIC_FRONTEND_CARGO="No package.json — building directly with Cargo Tauri."
+UBS_MSG_ja_TAURI_STATIC_FRONTEND_CARGO="package.json なし — Cargo Tauri で直接ビルドします。"
+UBS_MSG_zh_TAURI_STATIC_FRONTEND_CARGO="没有 package.json — 直接使用 Cargo Tauri 构建。"
+
+UBS_MSG_ko_CARGO_TAURI_REQUIRED="정적 Tauri 앱 빌드에는 cargo-tauri가 필요합니다."
+UBS_MSG_en_CARGO_TAURI_REQUIRED="cargo-tauri is required to build a static Tauri app."
+UBS_MSG_ja_CARGO_TAURI_REQUIRED="静的 Tauri アプリのビルドには cargo-tauri が必要です。"
+UBS_MSG_zh_CARGO_TAURI_REQUIRED="构建静态 Tauri 应用需要 cargo-tauri。"
+
+UBS_MSG_ko_TAURI_STATIC_OBFUSCATION_UNSUPPORTED="package.json 없는 정적 프런트엔드에는 JS 난독화를 적용할 수 없습니다."
+UBS_MSG_en_TAURI_STATIC_OBFUSCATION_UNSUPPORTED="JS obfuscation is unavailable for a static frontend without package.json."
+UBS_MSG_ja_TAURI_STATIC_OBFUSCATION_UNSUPPORTED="package.json のない静的フロントエンドでは JS 難読化を利用できません。"
+UBS_MSG_zh_TAURI_STATIC_OBFUSCATION_UNSUPPORTED="没有 package.json 的静态前端无法使用 JS 混淆。"
+
 UBS_MSG_ko_STEP_FRONTEND_BUILD_1OF4="[1/4] 프런트엔드 빌드..."
 UBS_MSG_en_STEP_FRONTEND_BUILD_1OF4="[1/4] Building frontend..."
 UBS_MSG_ja_STEP_FRONTEND_BUILD_1OF4="[1/4] フロントエンドをビルド中..."

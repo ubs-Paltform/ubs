@@ -127,7 +127,7 @@ cargo install tauri-cli --version 2.11.4 --locked
 cargo tauri build
 ```
 
-The native folder picker can open a project or monorepo root. Detected projects, version change, bounded parallel jobs, incremental/clean mode, and Flutter outputs are selectable in the window. Every GUI build forces `--non-interactive --no-publish`; values are allow-listed before they reach the subprocess, only one build runs at a time, and Cancel terminates the build process group. Packaged apps carry the same UBS scripts as read-only resources. Visual tokens and interaction rules live in [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md).
+The native folder picker can open a project or monorepo root. Detected projects are kept locally in the WebView and restored on the next launch; each saved folder has a direct build button using the visible safe options. Version change, bounded parallel jobs, incremental/clean mode, and Flutter outputs are selectable in the window. Every GUI build forces `--non-interactive --no-publish`; values are allow-listed before they reach the subprocess, only one build runs at a time, and Cancel terminates the build process group. Packaged apps carry the same UBS scripts as read-only resources. Visual tokens and interaction rules live in [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md).
 
 ## CLI reference
 

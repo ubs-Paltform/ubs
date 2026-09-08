@@ -496,6 +496,30 @@ grep -Fq -- '--target universal-apple-darwin' "$FIXTURE/tauri-universal.log" || 
   exit 1
 }
 
+# package.json 없는 정적 Tauri 앱은 Node 설치 없이 cargo-tauri로 직접 빌드한다.
+STATIC_TAURI="$FIXTURE/static-tauri"
+mkdir -p "$STATIC_TAURI/src-tauri"
+printf '%s\n' '{"productName":"StaticDesktop","version":"1.0.0"}' \
+  > "$STATIC_TAURI/src-tauri/tauri.conf.json"
+printf '%s\n' '#!/usr/bin/env bash' \
+  'printf "%s\n" "$*" >> "$UBS_TEST_LOG"' \
+  'if [ "$1 $2" = "tauri build" ]; then mkdir -p "src-tauri/target/release/bundle/macos/StaticDesktop.app/Contents"; fi' \
+  > "$FIXTURE/bin/cargo"
+chmod +x "$FIXTURE/bin/cargo"
+PATH="$FIXTURE/bin:$PATH" UBS_TEST_LOG="$FIXTURE/tauri-static.log" \
+  UBS_NON_INTERACTIVE=true UBS_VERSION_BUMP=none UBS_TAURI_PACKAGE_MODE=auto \
+  UBS_NO_NOTIFY=true TAURI_UNIVERSAL_MACOS=false \
+  bash -c 'cd "$1" && bash "$2"' _ \
+  "$STATIC_TAURI" "$REPO_DIR/scripts/build-tauri-macos.sh"
+[ -d "$STATIC_TAURI/src-tauri/target/release/bundle/macos/StaticDesktop.app" ] || {
+  echo "정적 Tauri 앱 산출물이 생성되지 않았습니다." >&2
+  exit 1
+}
+grep -Fqx 'tauri build' "$FIXTURE/tauri-static.log" || {
+  echo "정적 Tauri 앱이 cargo tauri build를 사용하지 않았습니다." >&2
+  exit 1
+}
+
 # legacy shell 감사도 블록 주석 안의 Gradle 설정을 활성 설정으로 오인하지 않는다.
 mkdir -p "$FIXTURE/apps/commented-gradle"
 printf '%s\n' '/*' 'minifyEnabled = true' 'proguardFiles("rules.pro")' '*/' \
