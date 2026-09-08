@@ -30,7 +30,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, List, Optional, Sequence, Set
+from typing import BinaryIO, Dict, Iterable, List, Optional, Sequence, Set
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from i18n import t
@@ -73,6 +73,17 @@ PYTHON_ADAPTER_TYPES = {
     "android", "kotlin-multiplatform", "kotlin", "gradle",
     "react", "next", "node", "ios-xcode", "godot",
 }
+PYTHON_ADAPTER_COMMANDS = {
+    "android": "gradle-adapter",
+    "kotlin-multiplatform": "gradle-adapter",
+    "kotlin": "gradle-adapter",
+    "gradle": "gradle-adapter",
+    "react": "node-adapter",
+    "next": "node-adapter",
+    "node": "node-adapter",
+    "ios-xcode": "xcode-adapter",
+    "godot": "godot-adapter",
+}
 GODOT_SCRIPT_EXPORT_MODE_NAMES = {0: "text", 1: "compiled", 2: "encrypted"}
 
 GREEN = "\033[0;32m"
@@ -80,6 +91,11 @@ YELLOW = "\033[1;33m"
 RED = "\033[0;31m"
 CYAN = "\033[0;36m"
 NC = "\033[0m"
+OUTPUT_LOCK = threading.Lock()
+CAPTURED_LOG_LIMIT = 2 * 1024 * 1024
+IMPORTANT_OUTPUT_PATTERN = re.compile(
+    r"(?:\bwarn(?:ing)?\b|\bdeprecated\b|⚠|ℹ|경고|警告|非推奨)", re.IGNORECASE,
+)
 
 
 def configure_standard_streams(
@@ -101,6 +117,18 @@ configure_standard_streams()
 
 
 USAGE = t("USAGE_TEXT")
+
+
+def default_jobs() -> int:
+    """Use bounded host parallelism unless UBS_JOBS explicitly overrides it."""
+    configured = os.environ.get("UBS_JOBS", "").strip()
+    if configured:
+        try:
+            return int(configured)
+        except ValueError as error:
+            raise ValueError(t("JOBS_INVALID")) from error
+    processors = os.cpu_count() or 1
+    return max(1, min(4, (processors + 1) // 2))
 
 
 @dataclass(frozen=True)
@@ -131,13 +159,20 @@ class Options:
     type_filter: str = ""
     project_path: Optional[Path] = None
     report_json: Optional[Path] = None
-    jobs: int = field(default_factory=lambda: int(os.environ.get("UBS_JOBS", "1")))
+    jobs: int = field(default_factory=default_jobs)
+    verbose: bool = os.environ.get("UBS_VERBOSE", "false").lower() == "true"
     update_check: bool = False
     update_prune_days: Optional[int] = None
 
 
 def eprint(message: str) -> None:
     print(message, file=sys.stderr)
+
+
+def status_print(message: str) -> None:
+    """Keep concurrent project status blocks from interleaving."""
+    with OUTPUT_LOCK:
+        print(message)
 
 
 def canonical_dir(value: Path) -> Path:
@@ -993,6 +1028,7 @@ def plan_item(project: Project, options: Options) -> dict:
     values: Dict[str, object] = {
         "version_bump": options.version_bump,
         "jobs": options.jobs,
+        "verbose": options.verbose,
         "execution_group": str(project_resource_root(project)),
     }
     if project.type == "flutter":
@@ -1648,7 +1684,8 @@ def parse_options(argv: Sequence[str]) -> Options:
     options = Options()
     if args and args[0] in {
         "detect", "list", "audit", "plan", "graph", "update", "build", "publish",
-        "node-adapter", "gradle-adapter", "xcode-adapter", "help", "-h", "--help",
+        "node-adapter", "gradle-adapter", "xcode-adapter", "godot-adapter",
+        "help", "-h", "--help",
     }:
         first = args.pop(0)
         options.command = "detect" if first == "list" else ("help" if first in {"help", "-h", "--help"} else first)
@@ -1681,6 +1718,7 @@ def parse_options(argv: Sequence[str]) -> Options:
         elif value == "--publish": options.publish = True
         elif value == "--no-publish": options.publish = False
         elif value == "--fail-fast": options.fail_fast = True
+        elif value == "--verbose": options.verbose = True
         elif value in {"--version-bump", "--flutter-platform", "--flutter-outputs", "--type", "--project", "--report-json", "--jobs", "--track", "--artifact"}:
             index += 1
             if index >= len(args): raise ValueError(t("OPTION_VALUE_REQUIRED", option=value))
@@ -1972,6 +2010,73 @@ def resolved_plan_items(projects: Sequence[Project], options: Options, root: Pat
     return items
 
 
+def adapter_command(project: Project, adapter: Path) -> List[str]:
+    command = PYTHON_ADAPTER_COMMANDS.get(project.type)
+    if command:
+        return [sys.executable, str(adapter), command, str(project.path)]
+    return ["bash", str(adapter)]
+
+
+def captured_log_tail(output: BinaryIO) -> tuple[str, bool]:
+    """Read a bounded UTF-8-safe tail from a binary temporary log."""
+    output.flush()
+    size = output.seek(0, os.SEEK_END)
+    start = max(0, size - CAPTURED_LOG_LIMIT)
+    output.seek(start)
+    data = output.read()
+    if start and b"\n" in data:
+        data = data.split(b"\n", 1)[1]
+    return data.decode("utf-8", errors="replace"), start > 0
+
+
+def run_adapter_process(
+    project: Project, adapter: Path, environment: Dict[str, str], options: Options,
+) -> int:
+    command = adapter_command(project, adapter)
+    concise = options.non_interactive and not options.verbose
+    if not concise:
+        return subprocess.run(
+            command, cwd=project.path, env=environment, check=False,
+        ).returncode
+
+    started = time.monotonic()
+    with tempfile.TemporaryFile(mode="w+b") as output:
+        status = subprocess.run(
+            command, cwd=project.path, env=environment, check=False,
+            stdout=output, stderr=subprocess.STDOUT,
+        ).returncode
+        captured, truncated = captured_log_tail(output)
+
+    if status == 0:
+        notices = [
+            line for line in captured.splitlines()
+            if IMPORTANT_OUTPUT_PATTERN.search(line)
+        ]
+        with OUTPUT_LOCK:
+            if notices:
+                eprint(f"{YELLOW}{t('BUILD_NOTICES', type=project.type, path=project.path)}{NC}")
+                for line in notices[:20]:
+                    eprint(line)
+                if len(notices) > 20:
+                    eprint(t("BUILD_NOTICES_MORE", count=len(notices) - 20))
+            print(
+                f"{GREEN}✓ {t('BUILD_PROJECT_DONE', type=project.type, path=project.path, seconds=int(time.monotonic() - started))}{NC}"
+            )
+        return 0
+
+    with OUTPUT_LOCK:
+        eprint(
+            f"{RED}{t('BUILD_LOG_FAILED', type=project.type, path=project.path, status=status)}{NC}"
+        )
+        if truncated:
+            eprint(t("BUILD_LOG_TRUNCATED", limit=CAPTURED_LOG_LIMIT // (1024 * 1024)))
+        if captured:
+            sys.stderr.write(captured)
+            if not captured.endswith("\n"):
+                sys.stderr.write("\n")
+    return status
+
+
 def run_project(
     project: Project, options: Options, report: BuildReport,
     artifact_scopes: Optional[Dict[Project, tuple[str, ...]]] = None,
@@ -1985,7 +2090,7 @@ def run_project(
     if not adapter.is_file():
         eprint(f"{RED}{t('BUILD_ADAPTER_MISSING', adapter=adapter)}{NC}")
         return 1
-    print(f"{CYAN}▶ [{project.type}] {project.path}{NC}")
+    status_print(f"{CYAN}▶ [{project.type}] {project.path}{NC}")
     if options.dry_run:
         runtime = "python3" if project.type in PYTHON_ADAPTER_TYPES else "bash"
         print(f"  (dry-run) {runtime} {adapter_relative}")
@@ -2001,6 +2106,7 @@ def run_project(
         "UBS_FLUTTER_PLATFORM": options.flutter_platform,
         "UBS_FLUTTER_OUTPUTS": options.flutter_outputs,
         "UBS_SKIP_CLEAN": str(options.skip_clean).lower(),
+        "UBS_VERBOSE": str(options.verbose).lower(),
         "UBS_RUNTIME_ROOT": str(RUNTIME_ROOT),
         "TAURI_OBFUSCATE_JS": str(options.obfuscate_js).lower(),
     })
@@ -2011,12 +2117,7 @@ def run_project(
         scope_path = Path(scope_name)
         environment["UBS_INTERNAL_ARTIFACT_SCOPE_FILE"] = scope_name
     try:
-        if project.type in PYTHON_ADAPTER_TYPES:
-            status = run_python_adapter(project.type, project.path, environment)
-        else:
-            status = subprocess.run(
-                ["bash", str(adapter)], cwd=project.path, env=environment, check=False,
-            ).returncode
+        status = run_adapter_process(project, adapter, environment, options)
         selected_outputs = tuple(
             line.strip()
             for line in (scope_path.read_text(encoding="utf-8").splitlines() if scope_path else ())
@@ -2330,12 +2431,16 @@ def main(argv: Sequence[str]) -> int:
             return run_update(options)
         validate_options(options)
         root = canonical_dir(options.root)
-        if options.command in {"node-adapter", "gradle-adapter", "xcode-adapter"}:
+        if options.command in {
+            "node-adapter", "gradle-adapter", "xcode-adapter", "godot-adapter",
+        }:
             environment = os.environ.copy()
             if options.command == "node-adapter":
                 return run_node_adapter(root, environment)
             if options.command == "xcode-adapter":
                 return run_xcode_adapter(root, environment)
+            if options.command == "godot-adapter":
+                return run_godot_adapter(root, environment)
             detected = detect_project_type(root)
             kind = os.environ.get("UBS_PROJECT_TYPE", detected or "gradle")
             if kind not in {"android", "kotlin-multiplatform", "kotlin", "gradle"}:
@@ -2408,7 +2513,7 @@ def main(argv: Sequence[str]) -> int:
             print(f"{CYAN}{t('MONOREPO_ROOT_AUTO_BUILD')}{NC}")
         if not options.obfuscate_js_explicit and any(project.type == "tauri" for project in projects):
             options.obfuscate_js = resolve_obfuscate_default(root)
-        if len(projects) == 1 and not options.build_all and options.jobs == 1:
+        if len(projects) == 1 and not options.build_all:
             artifact_scopes: Dict[Project, tuple[str, ...]] = {}
             status = run_project(projects[0], options, report, artifact_scopes)
             if status == 0 and not options.dry_run:

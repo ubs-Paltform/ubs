@@ -104,4 +104,36 @@ for lang, header_snippet, option1_snippet, option2_snippet in CASES:
         assert result is False, f"[{lang}] 2번 선택 결과가 False가 아닙니다: {result!r}"
 PY
 
+# --- 5) 비대화형 실제 빌드는 성공 chatter를 줄이고 완료 문구를 사용자 언어로 표시한다. ---
+
+FIXTURE="$(mktemp -d)"
+trap 'rm -rf "$FIXTURE"' EXIT
+mkdir -p "$FIXTURE/bin" "$FIXTURE/app"
+printf '%s\n' '#!/usr/bin/env bash' 'echo ordinary-adapter-chatter' > "$FIXTURE/bin/npm"
+chmod +x "$FIXTURE/bin/npm"
+printf '%s\n' '{"scripts":{"build":"true"}}' > "$FIXTURE/app/package.json"
+
+for case in \
+  'ko|빌드 완료:' \
+  'en|Build complete:' \
+  'ja|ビルド完了:' \
+  'zh|构建完成:'; do
+  lang="${case%%|*}"
+  expected="${case#*|}"
+  output="$(PATH="$FIXTURE/bin:$PATH" UBS_LANG="$lang" UBS_NON_INTERACTIVE=true \
+    UBS_SKIP_INSTALL=true UBS_NO_OPEN=true \
+    "$ROOT/build.sh" build --project "$FIXTURE/app" 2>&1)"
+  check_contains "$output" "$expected" "비대화형 빌드 완료 문구가 $lang 언어로 나오지 않습니다."
+  if printf '%s\n' "$output" | grep -Fq ordinary-adapter-chatter; then
+    echo "비대화형 성공 빌드의 adapter chatter가 축약되지 않았습니다." >&2
+    exit 1
+  fi
+done
+
+VERBOSE_OUTPUT="$(PATH="$FIXTURE/bin:$PATH" UBS_LANG=en UBS_NON_INTERACTIVE=true \
+  UBS_SKIP_INSTALL=true UBS_NO_OPEN=true \
+  "$ROOT/build.sh" build --verbose --project "$FIXTURE/app" 2>&1)"
+check_contains "$VERBOSE_OUTPUT" ordinary-adapter-chatter \
+  "--verbose가 adapter 전체 출력을 복구하지 못했습니다."
+
 echo "i18n 실행 경로 테스트 통과"

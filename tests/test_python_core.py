@@ -4,11 +4,13 @@
 from concurrent.futures import ThreadPoolExecutor
 import base64
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
 import sys
 import tempfile
+import threading
 import unittest
 from unittest import mock
 
@@ -33,6 +35,67 @@ class PythonCoreTests(unittest.TestCase):
         second.reconfigure.assert_called_once_with(
             encoding="utf-8", errors="backslashreplace",
         )
+
+    def test_default_jobs_uses_bounded_cpu_parallelism_and_env_override(self) -> None:
+        with mock.patch.dict(os.environ, {"UBS_JOBS": ""}), \
+                mock.patch.object(ubs.os, "cpu_count", return_value=16):
+            self.assertEqual(ubs.default_jobs(), 4)
+        with mock.patch.dict(os.environ, {"UBS_JOBS": ""}), \
+                mock.patch.object(ubs.os, "cpu_count", return_value=2):
+            self.assertEqual(ubs.default_jobs(), 1)
+        with mock.patch.dict(os.environ, {"UBS_JOBS": "3"}):
+            self.assertEqual(ubs.default_jobs(), 3)
+        with mock.patch.dict(os.environ, {"UBS_JOBS": "invalid"}):
+            with self.assertRaises(ValueError):
+                ubs.default_jobs()
+
+    def test_concise_build_hides_chatter_but_preserves_warnings(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            observed_command = []
+
+            def run_adapter(command, **kwargs):
+                observed_command.extend(command)
+                kwargs["stdout"].write(
+                    "ordinary adapter chatter\nwarning: cache miss\nℹ️ signing fallback\n".encode()
+                )
+                self.assertIs(kwargs["stderr"], ubs.subprocess.STDOUT)
+                return mock.Mock(returncode=0)
+
+            stdout, stderr = io.StringIO(), io.StringIO()
+            options = ubs.Options(root=root, non_interactive=True, verbose=False)
+            with mock.patch.object(ubs.subprocess, "run", side_effect=run_adapter), \
+                    mock.patch.object(ubs.sys, "stdout", stdout), \
+                    mock.patch.object(ubs.sys, "stderr", stderr):
+                status = ubs.run_project(
+                    ubs.Project("node", root), options, ubs.BuildReport(None),
+                )
+            self.assertEqual(status, 0)
+            self.assertEqual(observed_command[2], "node-adapter")
+            self.assertNotIn("ordinary adapter chatter", stdout.getvalue() + stderr.getvalue())
+            self.assertIn("warning: cache miss", stderr.getvalue())
+            self.assertIn("ℹ️ signing fallback", stderr.getvalue())
+            self.assertIn("빌드 완료", stdout.getvalue())
+
+    def test_concise_build_replays_bounded_log_on_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+
+            def run_adapter(_command, **kwargs):
+                kwargs["stdout"].write(b"compiler failed with detail\n")
+                return mock.Mock(returncode=7)
+
+            stdout, stderr = io.StringIO(), io.StringIO()
+            options = ubs.Options(root=root, non_interactive=True, verbose=False)
+            with mock.patch.object(ubs.subprocess, "run", side_effect=run_adapter), \
+                    mock.patch.object(ubs.sys, "stdout", stdout), \
+                    mock.patch.object(ubs.sys, "stderr", stderr):
+                status = ubs.run_project(
+                    ubs.Project("node", root), options, ubs.BuildReport(None),
+                )
+            self.assertEqual(status, 7)
+            self.assertIn("빌드 실패 로그", stderr.getvalue())
+            self.assertIn("compiler failed with detail", stderr.getvalue())
 
     def test_flutter_multiple_outputs_open_their_own_folders_not_shared_build_root(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -714,6 +777,30 @@ class PythonCoreTests(unittest.TestCase):
             opener.assert_called_once_with([
                 ubs.Project("node", core), ubs.Project("node", app),
             ], artifact_scopes=mock.ANY)
+
+    def test_default_jobs_runs_independent_projects_concurrently(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            paths = [root / "first", root / "second"]
+            for path in paths:
+                path.mkdir()
+            projects = [ubs.Project("node", path) for path in paths]
+            rendezvous = threading.Barrier(2)
+
+            def build(_project, _options, _report, _artifact_scopes=None):
+                rendezvous.wait(timeout=2)
+                return 0
+
+            with mock.patch.dict(os.environ, {"UBS_JOBS": ""}), \
+                    mock.patch.object(ubs.os, "cpu_count", return_value=4):
+                options = ubs.Options(root=root)
+            with mock.patch.object(ubs, "run_project", side_effect=build), \
+                    mock.patch.object(ubs, "open_artifact_directories"):
+                status = ubs.execute_projects(
+                    projects, options, ubs.BuildReport(None), root,
+                )
+            self.assertEqual(options.jobs, 2)
+            self.assertEqual(status, 0)
 
     def test_xcode_adapter_archives_with_discovered_scheme(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

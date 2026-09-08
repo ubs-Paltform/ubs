@@ -59,11 +59,12 @@ printf '%s\n' '{"scripts":{"build":"node root.js"}}' > "$FIXTURE/mono/package.js
 printf '%s\n' '{"scripts":{"build":"node child.js"}}' > "$FIXTURE/mono/apps/child/package.json"
 PLAN_JSON="$("$ROOT/build.sh" plan --json --all "$FIXTURE/mono")"
 printf '%s' "$PLAN_JSON" | python3 -c '
-import json, sys
+import json, os, sys
 items = json.load(sys.stdin)
 assert len(items) == 2
 assert all(item["adapter"] == "scripts/ubs.py#node" for item in items)
-assert all(item["options"]["jobs"] == 1 for item in items)
+expected_jobs = max(1, min(4, ((os.cpu_count() or 1) + 1) // 2))
+assert all(item["options"]["jobs"] == expected_jobs for item in items)
 assert all(item["options"]["install_mode"] == "auto" for item in items)
 assert all(item["options"]["package_manager"] == "npm" for item in items)
 '

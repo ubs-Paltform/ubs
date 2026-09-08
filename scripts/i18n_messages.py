@@ -320,6 +320,36 @@ MESSAGES: dict[str, dict[str, str]] = {
         "ja": "ビルド失敗: [{type}] {path}",
         "zh": "构建失败: [{type}] {path}",
     },
+    "BUILD_PROJECT_DONE": {
+        "ko": "빌드 완료: [{type}] {path} ({seconds}초)",
+        "en": "Build complete: [{type}] {path} ({seconds}s)",
+        "ja": "ビルド完了: [{type}] {path} ({seconds}秒)",
+        "zh": "构建完成: [{type}] {path} ({seconds}秒)",
+    },
+    "BUILD_NOTICES": {
+        "ko": "빌드 알림: [{type}] {path}",
+        "en": "Build notices: [{type}] {path}",
+        "ja": "ビルド通知: [{type}] {path}",
+        "zh": "构建提示: [{type}] {path}",
+    },
+    "BUILD_NOTICES_MORE": {
+        "ko": "알림 {count}줄 더 있음 — 전체 출력은 --verbose로 확인하세요.",
+        "en": "{count} more notice line(s) — use --verbose for full output.",
+        "ja": "通知があと {count} 行あります — 全出力は --verbose で確認してください。",
+        "zh": "另有 {count} 行提示 — 使用 --verbose 查看完整输出。",
+    },
+    "BUILD_LOG_FAILED": {
+        "ko": "빌드 실패 로그: [{type}] {path} (종료 코드 {status})",
+        "en": "Build failure log: [{type}] {path} (exit {status})",
+        "ja": "ビルド失敗ログ: [{type}] {path} (終了コード {status})",
+        "zh": "构建失败日志: [{type}] {path} (退出码 {status})",
+    },
+    "BUILD_LOG_TRUNCATED": {
+        "ko": "로그가 커서 마지막 {limit} MiB만 표시합니다.",
+        "en": "The log is large; showing only the last {limit} MiB.",
+        "ja": "ログが大きいため、末尾 {limit} MiB のみ表示します。",
+        "zh": "日志过大，仅显示最后 {limit} MiB。",
+    },
     "PARALLEL_EXECUTION_PLAN": {
         "ko": "프로젝트 {projects}개를 위상 단계 {layers}개, 충돌 없는 그룹 {groups}개로 나눠 최대 {jobs}개씩 병렬 실행합니다 (직렬 그룹 {serial}개).",
         "en": "Running {projects} project(s) across {layers} topological level(s) and {groups} conflict-free group(s), up to {jobs} in parallel (serial groups: {serial}).",
@@ -1026,7 +1056,8 @@ MESSAGES: dict[str, dict[str, str]] = {
   --publish | --no-publish            빌드 성공 후 스토어 업로드 강제/비활성화
   --artifact FILE                     publish 업로드 후보 하나를 명시적으로 선택
   --fail-fast
-  --jobs N                            독립 프로젝트 제한 병렬 빌드
+  --jobs N                            독립 프로젝트 병렬 수 (기본: CPU 기반 자동, 최대 4)
+  --verbose                           adapter 전체 출력 표시
   --report-json <파일>               실제 빌드 결과 JSON 저장
 
 지원 타입:
@@ -1063,7 +1094,8 @@ Main options:
   --publish | --no-publish            Force/disable store upload after a successful build
   --artifact FILE                     Select exactly one publish upload candidate
   --fail-fast
-  --jobs N                            Limit parallel builds of independent projects
+  --jobs N                            Parallel project limit (default: CPU-based auto, max 4)
+  --verbose                           Show full adapter output
   --report-json <file>                Save the actual build result as JSON
 
 Supported types:
@@ -1100,7 +1132,8 @@ Supported types:
   --publish | --no-publish            ビルド成功後のストアアップロードを強制/無効化
   --artifact FILE                     publish アップロード候補を1つ選択
   --fail-fast
-  --jobs N                            独立プロジェクトの並列ビルド数を制限
+  --jobs N                            並列プロジェクト数 (既定: CPU ベース自動、最大 4)
+  --verbose                           adapter の全出力を表示
   --report-json <ファイル>            実際のビルド結果を JSON で保存
 
 サポートするタイプ:
@@ -1137,7 +1170,8 @@ Supported types:
   --publish | --no-publish            强制/禁用构建成功后的商店上传
   --artifact FILE                     选择一个 publish 上传候选产物
   --fail-fast
-  --jobs N                            限制独立项目的并行构建数
+  --jobs N                            并行项目数（默认按 CPU 自动设置，最多 4）
+  --verbose                           显示 adapter 完整输出
   --report-json <文件>               将实际构建结果保存为 JSON
 
 支持的类型:
