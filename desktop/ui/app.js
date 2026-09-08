@@ -1,7 +1,6 @@
 (() => {
   "use strict";
 
-  const locale = resolveLocale(navigator.languages || [navigator.language]);
   const messages = window.UBS_MESSAGES;
   const tauri = window.__TAURI__;
   const invoke = tauri?.core?.invoke;
@@ -11,6 +10,7 @@
   const projectsKey = "ubs.saved-projects.v1";
   const selectedProjectKey = "ubs.selected-project.v1";
   const buildHistoryKey = "ubs.build-history.v1";
+  const localeKey = "ubs.locale.v1";
   const storage = (() => {
     try {
       return window.localStorage;
@@ -18,6 +18,11 @@
       return null;
     }
   })();
+  const detectedLocale = resolveLocale(navigator.languages || [navigator.language]);
+  const savedLocale = storage?.getItem(localeKey);
+  let locale = ["ko", "en"].includes(savedLocale)
+    ? savedLocale
+    : ["ko", "en"].includes(detectedLocale) ? detectedLocale : "en";
   const projects = [];
   const savedProjects = projectStore.load(storage, projectsKey);
   const buildHistory = projectStore.loadHistory(storage, buildHistoryKey);
@@ -28,6 +33,8 @@
   let startedAt = 0;
   let copyFeedbackTimer = null;
   let versionPreviewRequest = 0;
+  let lastBuildResult = null;
+  let runStatusState = { key: "ready", tone: "", values: {} };
 
   const elements = {
     addProject: document.querySelector("#add-project"),
@@ -64,7 +71,7 @@
     copyLog: document.querySelector("#copy-log"),
     copyLogStatus: document.querySelector("#copy-log-status"),
     elapsed: document.querySelector("#elapsed"),
-    localeName: document.querySelector("#locale-name")
+    localeOptions: [...document.querySelectorAll(".locale-option")]
   };
 
   function resolveLocale(languages) {
@@ -91,7 +98,33 @@
     document.querySelectorAll("[data-i18n-aria-label]").forEach((element) => {
       element.setAttribute("aria-label", text(element.dataset.i18nAriaLabel));
     });
-    elements.localeName.textContent = text("language");
+    elements.localeOptions.forEach((button) => {
+      const active = button.dataset.locale === locale;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+    setRunStatus(runStatusState.key, runStatusState.tone, runStatusState.values);
+  }
+
+  function setRunStatus(key, tone = "", values = {}) {
+    runStatusState = { key, tone, values };
+    elements.runStatus.textContent = text(key, values);
+    elements.runStatus.className = ["run-status", tone].filter(Boolean).join(" ");
+  }
+
+  function selectLocale(nextLocale) {
+    if (running || !["ko", "en"].includes(nextLocale) || nextLocale === locale) return;
+    locale = nextLocale;
+    storage?.setItem(localeKey, locale);
+    applyLocale();
+    applySelectedProject();
+    setProjectState(
+      selectedProject
+        ? text("projectSelected", { name: projectName(selectedProject.path) })
+        : text("waitingProject"),
+      selectedProject ? "success" : "neutral"
+    );
+    if (lastBuildResult) renderResult(lastBuildResult);
   }
 
   function setProjectState(message, tone = "neutral") {
@@ -203,6 +236,7 @@
         name: projectName(selectedProject.path)
       }));
     }
+    elements.outputFieldset.hidden = !isFlutter;
     elements.outputFieldset.disabled = running || !isFlutter;
     elements.outputHint.textContent = text(isFlutter ? "outputsReady" : "outputsUnavailable");
     elements.startBuild.disabled = running || !selectedProject;
@@ -453,6 +487,9 @@
     elements.cleanBuild.disabled = value;
     elements.projectList.disabled = value;
     elements.removeCurrentProject.disabled = value;
+    elements.localeOptions.forEach((button) => {
+      button.disabled = value;
+    });
     elements.buildHistory.querySelectorAll("button").forEach((button) => {
       button.disabled = value;
     });
@@ -471,6 +508,7 @@
   }
 
   function renderResult(result) {
+    lastBuildResult = result;
     const artifacts = result?.report?.results?.flatMap((item) => item.artifacts || []) || [];
     elements.buildResult.replaceChildren();
     const resultSummary = document.createElement("div");
@@ -529,8 +567,8 @@
     elements.buildLog.textContent = "";
     resetCopyFeedback();
     elements.buildResult.replaceChildren();
-    elements.runStatus.textContent = text("building");
-    elements.runStatus.className = "run-status running";
+    lastBuildResult = null;
+    setRunStatus("building", "running");
     setPipeline("build");
     setRunning(true);
     try {
@@ -554,18 +592,15 @@
       renderResult(result);
       historyResult = result.cancelled ? "cancelled" : result.success ? "success" : "failed";
       if (result.success) {
-        elements.runStatus.textContent = text("succeeded");
-        elements.runStatus.className = "run-status success";
+        setRunStatus("succeeded", "success");
         setPipeline("done");
         elements.pipeline.forEach((item) => item.className = "complete");
       } else {
-        elements.runStatus.textContent = result.cancelled ? text("cancelled") : text("failed", { code: result.exitCode ?? "?" });
-        elements.runStatus.className = "run-status error";
+        setRunStatus(result.cancelled ? "cancelled" : "failed", "error", { code: result.exitCode ?? "?" });
         setPipeline("build", true);
       }
     } catch {
-      elements.runStatus.textContent = text("buildError");
-      elements.runStatus.className = "run-status error";
+      setRunStatus("buildError", "error");
       setPipeline("build", true);
       appendLog({ stream: "stderr", line: text("buildError") });
     } finally {
@@ -578,7 +613,7 @@
   async function cancelBuild() {
     if (!invoke || !running) return;
     elements.cancelBuild.disabled = true;
-    elements.runStatus.textContent = text("cancelling");
+    setRunStatus("cancelling", "running");
     try {
       await invoke("cancel_build");
     } finally {
@@ -616,6 +651,9 @@
     elements.startBuild.addEventListener("click", startBuild);
     elements.cancelBuild.addEventListener("click", cancelBuild);
     elements.copyLog.addEventListener("click", copyBuildLog);
+    elements.localeOptions.forEach((button) => {
+      button.addEventListener("click", () => selectLocale(button.dataset.locale));
+    });
     if (listen) await listen("build-log", ({ payload }) => appendLog(payload));
     if (!invoke || !openDialog) setProjectState(text("desktopOnly"), "error");
   }

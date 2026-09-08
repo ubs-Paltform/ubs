@@ -1,6 +1,6 @@
 window.UBS_MESSAGES = Object.freeze({
   ko: {
-    language: "한국어", skip: "빌드 설정으로 이동", workspace: "작업 공간", build: "빌드",
+    language: "한국어", languageSelector: "언어 선택", skip: "빌드 설정으로 이동", workspace: "작업 공간", build: "빌드",
     localOnly: "로컬 전용", noRemote: "원격 서비스·업로드 없음",
     recentBuilds: "최근 빌드", historyEmpty: "아직 빌드 기록이 없습니다.",
     historySuccess: "완료", historyFailed: "실패", historyCancelled: "취소",
@@ -28,7 +28,7 @@ window.UBS_MESSAGES = Object.freeze({
     noArtifacts: "보고된 산출물 없음", buildError: "빌드를 시작하지 못했습니다."
   },
   en: {
-    language: "English", skip: "Skip to build controls", workspace: "Workspace", build: "Build",
+    language: "English", languageSelector: "Choose language", skip: "Skip to build controls", workspace: "Workspace", build: "Build",
     localOnly: "Local only", noRemote: "No remote service or upload",
     recentBuilds: "Recent builds", historyEmpty: "No builds yet.",
     historySuccess: "Done", historyFailed: "Failed", historyCancelled: "Cancelled",
@@ -56,7 +56,7 @@ window.UBS_MESSAGES = Object.freeze({
     noArtifacts: "No artifacts reported", buildError: "Could not start the build."
   },
   ja: {
-    language: "日本語", skip: "ビルド設定へ移動", workspace: "ワークスペース", build: "ビルド",
+    language: "日本語", languageSelector: "言語を選択", skip: "ビルド設定へ移動", workspace: "ワークスペース", build: "ビルド",
     localOnly: "ローカルのみ", noRemote: "外部サービス・アップロードなし",
     recentBuilds: "最近のビルド", historyEmpty: "ビルド履歴はまだありません。",
     historySuccess: "完了", historyFailed: "失敗", historyCancelled: "中止",
@@ -84,7 +84,7 @@ window.UBS_MESSAGES = Object.freeze({
     noArtifacts: "成果物の報告なし", buildError: "ビルドを開始できませんでした。"
   },
   zh: {
-    language: "简体中文", skip: "跳到构建设置", workspace: "工作区", build: "构建",
+    language: "简体中文", languageSelector: "选择语言", skip: "跳到构建设置", workspace: "工作区", build: "构建",
     localOnly: "仅限本机", noRemote: "无远程服务或上传",
     recentBuilds: "最近构建", historyEmpty: "暂无构建记录。",
     historySuccess: "完成", historyFailed: "失败", historyCancelled: "已取消",
