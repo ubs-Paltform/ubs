@@ -434,6 +434,39 @@ fi
 BUILD_COMPLETED=true
 
 # ==========================================
+# 디버그 심볼 보관
+# ==========================================
+# --obfuscate 로 빌드하면 크래시 스택이 "unparsed" 로만 남는다. 역매핑하려면 그 빌드의
+# 심볼이 있어야 하는데, build/ 안에 두면 다음 빌드나 clean 에 사라진다 — 실제로
+# 배포된 빌드의 심볼이 하나도 남아 있지 않아 이미 수집된 크래시를 소급할 수 없었다.
+#
+# ⚠️ pubspec 의 name 은 계측 app id 와 다르다(sage_yijing vs prism). 매핑표를 두면
+# 그게 또 사람이 관리할 목록이 되므로, meta.json 에 근거를 적어 두고 찾는 쪽이 훑는다.
+archive_symbols() {
+  local store="${UBS_SYMBOL_STORE:-$HOME/Desktop/개발/app-symbols}"
+  local pkg appid dest n=0 pair src tag
+  pkg=$(grep '^name:' "$PUBSPEC" | head -1 | sed 's/name: *//' | tr -d '[:space:]')
+  [ -n "$pkg" ] || return 0
+  appid=$(grep -hoE 'applicationId[[:space:]]*=?[[:space:]]*"[^"]+"' android/app/build.gradle* 2>/dev/null \
+          | head -1 | sed 's/.*"\(.*\)"/\1/')
+  dest="$store/$pkg/${VERSION_NAME}+${BUILD_NUMBER}"
+  for pair in app:android ios:ios macos:macos; do
+    src="build/${pair%%:*}/outputs/symbols"
+    tag="${pair##*:}"
+    [ -d "$src" ] || continue
+    mkdir -p "$dest/$tag" && cp -R "$src/." "$dest/$tag/" 2>/dev/null && n=$((n + 1))
+  done
+  [ "$n" -gt 0 ] || return 0
+  cat > "$dest/meta.json" <<META
+{"package": "$pkg", "application_id": "$appid", "version": "$VERSION_NAME", "build": "$BUILD_NUMBER", "archived_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
+META
+  echo -e "${GREEN}🧭 디버그 심볼 보관: $dest (${n}개 플랫폼)${NC}"
+}
+
+# 보관이 실패해도 빌드를 깨지 않는다 — 산출물이 본업이다.
+archive_symbols || true
+
+# ==========================================
 # 버전 변경 커밋 (안 하면 uncommitted diff로 계속 쌓임 — #26)
 # ==========================================
 
