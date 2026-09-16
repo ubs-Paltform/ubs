@@ -46,7 +46,7 @@
     ],
     "macOS": {
       "signingIdentity": "-",
-      "bundleVersion": "3.11.6"
+      "bundleVersion": "3.11.7"
     },
     "resources": {
       "../../.env.example": "ubs-runtime/.env.example",
