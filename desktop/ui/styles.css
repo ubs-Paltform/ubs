@@ -1082,6 +1082,14 @@ select {
   gap: 10px;
 }
 
+.log-status {
+  min-width: 8ch;
+  color: #566b78;
+  font-family: var(--mono);
+  font-size: 9px;
+  white-space: nowrap;
+}
+
 #elapsed {
   color: #5d707c;
   font-family: var(--mono);
@@ -1140,12 +1148,27 @@ select {
   margin: 0;
   padding: 16px;
   overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #3a4f60 #0c151d;
   color: #93a8b1;
   font-family: var(--mono);
   font-size: 10px;
   line-height: 1.65;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+#build-log::-webkit-scrollbar {
+  width: 8px;
+}
+
+#build-log::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #31434d;
+}
+
+#build-log::-webkit-scrollbar-track {
+  background: #0c151d;
 }
 
 .build-result {
