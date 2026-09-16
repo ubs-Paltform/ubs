@@ -11,6 +11,7 @@
   const selectedProjectKey = "ubs.selected-project.v1";
   const buildHistoryKey = "ubs.build-history.v1";
   const localeKey = "ubs.locale.v1";
+  const LOG_LINE_LIMIT = 420;
   const storage = (() => {
     try {
       return window.localStorage;
@@ -70,9 +71,11 @@
     buildResult: document.querySelector("#build-result"),
     copyLog: document.querySelector("#copy-log"),
     copyLogStatus: document.querySelector("#copy-log-status"),
+    logStatus: document.querySelector("#log-status"),
     elapsed: document.querySelector("#elapsed"),
     localeOptions: [...document.querySelectorAll(".locale-option")]
   };
+  let logRenderQueued = false;
 
   function resolveLocale(languages) {
     const language = languages.find(Boolean)?.toLowerCase() || "en";
@@ -104,6 +107,10 @@
       button.setAttribute("aria-pressed", String(active));
     });
     setRunStatus(runStatusState.key, runStatusState.tone, runStatusState.values);
+    elements.logStatus.textContent = text("logStatus", {
+      current: String(logLines.length),
+      total: String(LOG_LINE_LIMIT)
+    });
   }
 
   function setRunStatus(key, tone = "", values = {}) {
@@ -343,6 +350,48 @@
     syncBuildModeVisibility();
   }
 
+  function scheduleLogRender() {
+    if (logRenderQueued) return;
+    logRenderQueued = true;
+    window.requestAnimationFrame(() => {
+      logRenderQueued = false;
+      elements.buildLog.textContent = logLines.join("\n");
+      elements.logStatus.textContent = text("logStatus", {
+        current: String(logLines.length),
+        total: String(LOG_LINE_LIMIT)
+      });
+      const atTail = elements.buildLog.scrollHeight - elements.buildLog.clientHeight <= elements.buildLog.scrollTop + 16;
+      if (atTail) elements.buildLog.scrollTop = elements.buildLog.scrollHeight;
+      elements.copyLog.disabled = logLines.length === 0;
+    });
+  }
+
+  function appendLog(payload) {
+    const line = `${payload?.stream === "stderr" ? "! " : "› "}${payload?.line || ""}`;
+    if (!line.trim()) return;
+    logLines.push(line);
+    if (logLines.length > LOG_LINE_LIMIT) {
+      logLines.splice(0, logLines.length - LOG_LINE_LIMIT);
+    }
+    scheduleLogRender();
+  }
+
+  function appendLogLines(raw, stream = "stdout") {
+    if (!raw) return;
+    const lines = raw.split("\n").map((line) => `${stream === "stderr" ? "! " : "› "}${line}`);
+    if (lines.length === 0) return;
+    if (logLines.length + lines.length <= LOG_LINE_LIMIT) {
+      logLines.push(...lines);
+    } else {
+      const cut = lines.length - (LOG_LINE_LIMIT - logLines.length);
+      logLines.push(...lines.slice(Math.max(0, cut)));
+    }
+    if (logLines.length > LOG_LINE_LIMIT) {
+      logLines.splice(0, logLines.length - LOG_LINE_LIMIT);
+    }
+    scheduleLogRender();
+  }
+
   function syncProject() {
     const project = projects[Number(elements.projectList.value)] || null;
     if (project) selectProject(project, false, false);
@@ -406,16 +455,6 @@
       "success"
     );
     syncProject();
-  }
-
-  function appendLog(payload) {
-    const prefix = payload?.stream === "stderr" ? "! " : "› ";
-    const line = `${prefix}${payload?.line || ""}`;
-    logLines.push(line);
-    if (logLines.length > 300) logLines.shift();
-    elements.buildLog.textContent = logLines.join("\n");
-    elements.buildLog.scrollTop = elements.buildLog.scrollHeight;
-    elements.copyLog.disabled = false;
   }
 
   function resetCopyFeedback() {
@@ -565,6 +604,10 @@
     let historyResult = "failed";
     logLines.splice(0);
     elements.buildLog.textContent = "";
+    elements.logStatus.textContent = text("logStatus", {
+      current: "0",
+      total: String(LOG_LINE_LIMIT)
+    });
     resetCopyFeedback();
     elements.buildResult.replaceChildren();
     lastBuildResult = null;
@@ -583,11 +626,8 @@
         }
       });
       if (logLines.length === 0) {
-        const fallback = [result.stdout, result.stderr].filter(Boolean).join("\n");
-        if (fallback) {
-          elements.buildLog.textContent = fallback;
-          elements.copyLog.disabled = false;
-        }
+        if (result.stdout) appendLogLines(result.stdout, "stdout");
+        if (result.stderr) appendLogLines(result.stderr, "stderr");
       }
       renderResult(result);
       historyResult = result.cancelled ? "cancelled" : result.success ? "success" : "failed";
